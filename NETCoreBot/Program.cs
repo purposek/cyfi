@@ -398,7 +398,7 @@ namespace NETCoreBot
         {
             foreach (var point in BoundingBox(resultantPosition))
             {
-                if (point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199) return false;
+                if (point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99) return false;
 
                 if (WorldMapPerspective.ObjectCoordinates[point.X, point.Y] == ObjectType.Collectible)
                 {
@@ -451,7 +451,7 @@ namespace NETCoreBot
 
         private static bool BotOutOfBounds(Tuple<int, int> resultantPosition)
         {
-            return BoundingBox(resultantPosition).Any(point => point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199);
+            return BoundingBox(resultantPosition).Any(point => point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99);
         }
 
         private static bool BotInUnachievablePosition(Tuple<int, int> resultantPosition)
@@ -652,9 +652,9 @@ namespace NETCoreBot
                 targetCollectablePoint = null;
 
                 level = botStateDTO.CurrentLevel;
-                for (int i = 0; i < 500; i++)
+                for (int i = 0; i < 100; i++)
                 {
-                    for (int j = 0; j < 200; j++)
+                    for (int j = 0; j < 100; j++)
                     {
                         WorldMapPerspective.SetCoordinates(i, j, (int)ObjectType.Air);
                     }
@@ -667,7 +667,7 @@ namespace NETCoreBot
                 {
                     var worldX = botStateDTO.X + i - 16;
                     var worldY = botStateDTO.Y + j - 10;
-                    if (worldX >= 0 && worldX < 500 && worldY >= 0 && worldY < 200)
+                    if (worldX >= 0 && worldX < 100 && worldY >= 0 && worldY < 100)
                     {
                         WorldMapPerspective.SetCoordinates(worldX, worldY, (ObjectType)botStateDTO.HeroWindow[i][j]);
 
@@ -1284,19 +1284,19 @@ namespace NETCoreBot
 
         private bool BotOutOfBounds()
         {
-            return BoundingBox().Any(point => point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199);
+            return BoundingBox().Any(point => point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99);
         }
 
         private bool BotOutOfBounds(Tuple<int, int> resultantPosition)
         {
-            return BoundingBox(resultantPosition).Any(point => point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199);
+            return BoundingBox(resultantPosition).Any(point => point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99);
         }
 
         private void TryCollect()
         {
             foreach (var point in BoundingBox())
             {
-                if (point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199) return;
+                if (point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99) return;
 
                 if (WorldMapPerspective.ObjectCoordinates[point.X, point.Y] == ObjectType.Collectible)
                 {
@@ -1311,7 +1311,7 @@ namespace NETCoreBot
         {
             foreach (var point in BoundingBox(resultantPosition))
             {
-                if (point.X < 0 || point.X > 499 || point.Y < 0 || point.Y > 199) return;
+                if (point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99) return;
 
                 if (WorldMapPerspective.ObjectCoordinates[point.X, point.Y] == ObjectType.Collectible)
                 {
