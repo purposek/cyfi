@@ -1,0 +1,92 @@
+# ==============================| DISCLAIMER NOTICE |============================== #
+# FOR LANGUAGE : .NET Core 3.1
+# FOR PLAYER   : purpose katakwa
+#
+# This file is provided to you (The player) to enable our new automatic submission provess via Github.
+# There is no need to make changes to this file, as it should be sufficient for submitting your bot.
+#
+# It is strongly advised not to tamper with the file unless you have sufficient experience.
+# The values being used here are extremely important as it binds this repository/submission process to your Entelect Challenge account.
+# Changing core variables and processes here might result in us not getting your submission, not allocating it to your account or not running simulation matches. All of which will void your submission from a tournament.
+#
+#
+#  The Entelect Challenge team is not liable if you make any changes to this file.
+#
+#
+
+name: dotnetcore
+on:
+  push:
+    branches:
+      - master
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: build-project
+        run: dotnet publish --configuration Release --output ./publish/
+      - name: upload-build-files
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-files
+          path: ./publish/*
+  docker-build:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: download-build-files
+        uses: actions/download-artifact@v2
+        with:
+          name: build-files
+          path: ${{ github.workspace }}/publish
+      - name: Configure player AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: 0f2f0c1a-4fd7-4adc-a3f3-3ff10fe6ee39
+          IMAGE_TAG: ${{ github.run_id }}-${{ github.run_number }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG . --build-arg SOURCE_DIRECTORY=./publish
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+  upload-code:
+    runs-on: ubuntu-latest
+    needs: [build]
+    env:
+      EC_ID: ${{ github.run_id }}-${{ github.run_number }}
+      PLAYER_ID: 0f2f0c1a-4fd7-4adc-a3f3-3ff10fe6ee39
+    steps:
+      - name: Checkout code into workspace directory
+        uses: actions/checkout@v2
+      - name: download build-files
+        uses: actions/download-artifact@v2
+        with:
+          name: build-files
+          path: ${{ github.workspace }}/publish
+      - name: Configure AWS credentials for AWS CLI
+        run: |
+          mkdir -p ~/.aws
+          touch ~/.aws/credentials
+          echo "[default]
+          aws_access_key_id =  ${{ secrets.ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.SECRET_ACCESS_KEY }}" > ~/.aws/credentials
+      - name: Copy source code zip to player folder on s3 with the AWS CLI
+        run: |
+          tar cf ../source-code.zip --exclude=".git" --exclude=".github" --exclude="publish" .
+          aws --region eu-west-1 s3 cp ../source-code.zip s3://entelect-challenge-player-submission-prod-eu-west-1/submission/$PLAYER_ID/$EC_ID/source-code.zip
+      - name: Copy built code zip to player folder on s3 with the AWS CLI
+        run: |
+          tar cf ../built-code.zip ./publish
+          aws --region eu-west-1 s3 cp ../built-code.zip s3://entelect-challenge-player-submission-prod-eu-west-1/submission/$PLAYER_ID/$EC_ID/built-code.zip
