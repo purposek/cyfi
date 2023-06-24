@@ -1,3 +1,5 @@
+using System;
+
 namespace NETCoreBot.Models
 {
     public class BotStateDTO
@@ -14,7 +16,14 @@ namespace NETCoreBot.Models
 
         public int X { get; set; }
         public int Y { get; set; }
-        public string RadarData { get; set; }
+        public int[][] RadarData { get; set; }
+        public Tuple<int, int> CurrentPosition
+        {
+            get
+            {
+                return new Tuple<int, int>(X, Y);
+            }
+        }
 
         public string PrintWindow()
         {

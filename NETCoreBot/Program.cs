@@ -115,7 +115,7 @@ namespace NETCoreBot
                     //TODO Check if previous command evaluated
 
                     var currentPosition = new Tuple<int, int>(botStateDTO.X, botStateDTO.Y);
-                    if (!nextCommands.Any() && botStateDTO.CurrentState != "Jumping" && botStateDTO.CurrentState != "Falling" && BotContainsLadder(currentPosition) && BotOnLadder(currentPosition))
+                    if (!nextCommands.Any() && botStateDTO.CurrentState != "Jumping" && botStateDTO.CurrentState != "Falling" && BotContainsLadder(currentPosition) && BotOnLadder(currentPosition) || BotOnSolid(botStateDTO.CurrentPosition) || BotContainsLadder(botStateDTO.CurrentPosition))
                     {
                         Tuple<int, int> target = ClosestLowerCollectablesWithinRange(currentPosition);
 
@@ -173,7 +173,7 @@ namespace NETCoreBot
                     //    nextCommands = chosenFallingCommands;
                     //}
 
-                    if (botStateDTO.CurrentState == "Falling")
+                    if (false && botStateDTO.CurrentState == "Falling")
                     {
                         InputCommand collectingCommand = TryCollectAndLandSafely(new Tuple<int, int>(botStateDTO.X, botStateDTO.Y), EvaluationMode.Collect);
                         if (collectingCommand != InputCommand.None)
@@ -884,29 +884,30 @@ namespace NETCoreBot
                 switch (inputCommand)
                 {
                     case InputCommand.UP:
-                        if (lastCommandSent == InputCommand.UPRIGHT || lastCommandSent == InputCommand.RIGHT || lastCommandSent == InputCommand.UPLEFT || lastCommandSent == InputCommand.LEFT)
-                        {
-                            FailedValidation = true;
-                            FailedValidationAtCommandIndex = commandIndex;
-                            return;
+                        //if (lastCommandSent == InputCommand.UPRIGHT || lastCommandSent == InputCommand.RIGHT || lastCommandSent == InputCommand.UPLEFT || lastCommandSent == InputCommand.LEFT)
+                        //{
+                        //    FailedValidation = true;
+                        //    FailedValidationAtCommandIndex = commandIndex;
+                        //    return;
 
-                            //dx =  1;
-                            //evaluatingCommand = InputCommand.UPRIGHT;
-                        }
-                        else if (lastCommandSent == InputCommand.UPLEFT)
-                        {
-                            FailedValidation = true;
-                            FailedValidationAtCommandIndex = commandIndex;
-                            return;
+                        //    //dx =  1;
+                        //    //evaluatingCommand = InputCommand.UPRIGHT;
+                        //}else if(lastCommandSent == InputCommand.UPLEFT)
+                        //{
+                        //    FailedValidation = true;
+                        //    FailedValidationAtCommandIndex = commandIndex;
+                        //    return;
 
-                            //dx = -1;
-                            //evaluatingCommand = InputCommand.UPLEFT;
-                        }
-                        else
-                        {
-                            dx = 0;
-                            evaluatingCommand = InputCommand.UP;
-                        }
+                        //    //dx = -1;
+                        //    //evaluatingCommand = InputCommand.UPLEFT;
+                        //}
+                        //else
+                        //{
+                        //    dx = 0;
+                        //    evaluatingCommand = InputCommand.UP;
+                        //}
+                        dx = 0;
+                        evaluatingCommand = InputCommand.UP;
 
                         dy = 1;
                         if (BotOnPlatform())
@@ -1022,7 +1023,7 @@ namespace NETCoreBot
                         break;
                     }
 
-                    if (overallTicksEvaluated > maxEvaluationTicks || BotOnHazard() || BotInUnachievablePosition(dugInDirection) || BotOutOfBounds() || BotOnSolid())
+                    if (overallTicksEvaluated > maxEvaluationTicks || BotOnHazard() || BotInUnachievablePosition(dugInDirection) || BotOutOfBounds()/* || BotOnSolid()*/)
                     {
                         FailedValidation = true;
                         FailedValidationAtCommandIndex = commandIndex;
