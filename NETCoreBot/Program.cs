@@ -45,7 +45,9 @@ namespace NETCoreBot
             InputCommand.DIGRIGHT,
             InputCommand.UPLEFT,
             InputCommand.UPRIGHT,
-            InputCommand.UP
+            InputCommand.UP,
+            InputCommand.LEFT,
+            InputCommand.RIGHT,
         };
 
 
@@ -111,6 +113,7 @@ namespace NETCoreBot
                     botService.SetBotState(botStateDTO);
                     botStatus = botStateDTO;
                     UpdatePerspectives(botStateDTO);
+                    collectiblePoints = collectiblePoints.Except(collectiblePoints.Where(x => x.Item2 > botStateDTO.CurrentPosition.Item2 && WorldMapPerspective.ObjectCoordinates[x.Item1 - 1, x.Item2] == ObjectType.Solid && WorldMapPerspective.ObjectCoordinates[x.Item1 + 1, x.Item2] == ObjectType.Solid)).ToList();
 
                     //TODO Check if previous command evaluated
 
@@ -119,7 +122,7 @@ namespace NETCoreBot
                     {
                         Tuple<int, int> target = ClosestLowerCollectablesWithinRange(currentPosition);
 
-                        if (target != null)
+                        if (false && target != null)
                         {
                             if (target.Item1 == currentPosition.Item1)
                             {
@@ -140,7 +143,7 @@ namespace NETCoreBot
                     }
 
                     dashing = false;
-                    if (!nextCommands.Any() && botStateDTO.CurrentState != "Jumping" && botStateDTO.CurrentState != "Falling" && (HeroOnPlatform(botStateDTO) || HeroOnLadder(botStateDTO)))
+                    if (!nextCommands.Any() && botStateDTO.CurrentState != "Jumping" && botStateDTO.CurrentState != "Falling" && (HeroOnPlatform(botStateDTO) || HeroOnLadder(botStateDTO) || BotOnSolid(botStateDTO.CurrentPosition) || BotContainsLadder(botStateDTO.CurrentPosition) || botStateDTO.CurrentPosition.Item2 == 0))
                     {
                         Stopwatch stopwatch = Stopwatch.StartNew();
                         if (collectiblePoints.Any() && (targetCollectablePoint == null || !collectiblePoints.Contains(targetCollectablePoint) || distTargetCollectablePoint < DistanceFromHero(targetCollectablePoint, botStateDTO)))
@@ -410,7 +413,7 @@ namespace NETCoreBot
 
         private static bool ShouldAbortEvaluation(int overallTicksEvaluated, Tuple<int, int> resultantPosition)
         {
-            return overallTicksEvaluated > 16 || BotOnHazard(resultantPosition) || BotInUnachievablePosition(resultantPosition) || BotOutOfBounds(resultantPosition) || BotOnSolid(resultantPosition);
+            return overallTicksEvaluated > 16 || BotOnHazard(resultantPosition) || BotInUnachievablePosition(resultantPosition) || BotOutOfBounds(resultantPosition);
         }
 
         private static bool BotOnPlatform(Tuple<int, int> resultantPosition)
@@ -998,6 +1001,16 @@ namespace NETCoreBot
 
                         evaluatingCommand = InputCommand.DIGRIGHT;
                         break;
+                    case InputCommand.LEFT:
+                        dx = -1;
+                        dy = resultantState == "Falling" ? -1 : 0;
+                        dxRevertTick = resultantState == "Falling" ? 16 : 1;
+                        break;
+                    case InputCommand.RIGHT:
+                        dx = 1;
+                        dy = resultantState == "Falling" ? -1 : 0;
+                        dxRevertTick = resultantState == "Falling" ? 16 : 1;
+                        break;
                 }
 
                 //TODO Consider when map is smaller and up restricted by solids
@@ -1028,6 +1041,34 @@ namespace NETCoreBot
                         FailedValidation = true;
                         FailedValidationAtCommandIndex = commandIndex;
                         return;
+                    }
+
+                    if (BotOnSolid())
+                    {
+                        if (evaluationMode == EvaluationMode.Collect)
+                        {
+                            if (!collectedPositions.Any())
+                            {
+                                FailedValidation = true;
+                                return;
+                            }
+                        }
+                        SafeCommands.Add(evaluatingCommand);
+                        break;
+                    }
+
+                    if (BotContainsLadder())
+                    {
+                        if (evaluationMode == EvaluationMode.Collect)
+                        {
+                            if (!collectedPositions.Any())
+                            {
+                                FailedValidation = true;
+                                return;
+                            }
+                        }
+                        SafeCommands.Add(evaluatingCommand);
+                        break;
                     }
 
                     if (BotOnPlatform())
@@ -1064,6 +1105,7 @@ namespace NETCoreBot
                     }
 
                     dy = resultantState == "Jumping" ? dy : -1;
+                    resultantState = "Falling";
                     //var resultantPosition = new Tuple<int, int>(ResultantPosition.Item1, ResultantPosition.Item2);
                     //var bestSafeLanding = TryLandSafely(resultantPosition, tick, dx, fallingPermutations, evaluationMode);
 
