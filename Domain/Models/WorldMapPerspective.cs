@@ -58,6 +58,7 @@ namespace Domain.Models
                     if (worldX >= 0 && worldX < 100 && worldY >= 0 && worldY < 100)
                     {
                         SetCoordinates(worldX, worldY, (ObjectType)botState.HeroWindow[i][j]);
+                        SetKnownCoordinates(worldX, worldY, true);
 
                         if (Collectibles.Contains(new Point(worldX, worldY)) && (ObjectType)botState.HeroWindow[i][j] != ObjectType.Collectible)
                         {
@@ -140,6 +141,11 @@ namespace Domain.Models
         public static bool BotBoundsContainPoint(Point currentNode, Point endNode)
         {
             return !BotOutOfBounds(currentNode) && BoundingBox(currentNode).Any(point => point.Equals(endNode));
+        }
+
+        public static bool BoundingBoxHasUnknown(Point point)
+        {
+            return !BotOutOfBounds(point) && BoundingBox(point).Any(p => !KnownCoordinates[p.X][p.Y]);
         }
     }
 }

@@ -61,6 +61,33 @@ namespace ReferenceBot.AI.States
 
             // Find all collectibles
             List<Point> collectibles = WorldMapPerspective.Collectibles;
+            if (collectibles.Count() == 0) {
+                for (int i = 0; i < 100; i++)
+                {
+                    for (int j = 0; j < 100; j++)
+                    {
+                        if (WorldMapPerspective.KnownCoordinates[i][j] && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j)))
+                        {
+                            collectibles.Add(new Point(i, j));
+                        }
+                    }
+                }
+            }
+
+            if (collectibles.Count() == 0)
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    for (int j = 0; j < 100; j++)
+                    {
+                        if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Solid)
+                        {
+                            collectibles.Add(new Point(i, j));
+                        }
+                    }
+                }
+            }
+
             Console.WriteLine($"Search found {collectibles.Count()} collectibles");
             if (collectibles.Count() == 0)
             {
@@ -75,6 +102,8 @@ namespace ReferenceBot.AI.States
             {
                 sortedCollectibles.Add(collectible);
             }
+            //var count = sortedCollectibles.Count;
+            //count = count > 100 ? 30 : 3;
             closestCollectibles = sortedCollectibles.Take(3).ToList();
 
             //Stopwatch sw = Stopwatch.StartNew();
@@ -127,8 +156,10 @@ namespace ReferenceBot.AI.States
             {
                 return InputCommand.None;
             }
-            
+
             //moving upright for now
+            if (BotState.X > 90) direction = -1;
+            if (BotState.X < 10) direction = 1;
 
             return direction == -1 ? InputCommand.DIGLEFT : InputCommand.DIGRIGHT;
             
