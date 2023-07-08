@@ -1,4 +1,4 @@
-﻿namespace NETCoreBot.Enums
+﻿namespace Domain.Enums
 {
     public enum ObjectType
     {
@@ -8,8 +8,7 @@
         Hazard,
         Platform,
         Ladder,
-        Target,
-        ResultantPosition
+        Opponent,
+        Target
     }
 }
-

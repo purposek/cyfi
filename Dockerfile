@@ -3,6 +3,9 @@ WORKDIR /app
 
 COPY . ./
 
+# Install Arial for build
+RUN apt update && apt install -y fonts-liberation fontconfig && fc-cache
+
 RUN dotnet restore
 RUN dotnet publish --configuration Debug --output ./publish
 
@@ -14,5 +17,7 @@ WORKDIR /app
 # The directory of the built code to copy into this image, to be able to run the bot.
 COPY --from=build /app/publish/ .
 
+ENV DOCKER=1
+
 # The entrypoint to run the bot
-ENTRYPOINT ["dotnet", "NETCoreBot.dll"]
+CMD ["dotnet", "ReferenceBot.dll"]

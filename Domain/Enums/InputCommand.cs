@@ -1,8 +1,8 @@
-namespace NETCoreBot.Enums
+namespace Domain.Enums
 {
     public enum InputCommand
     {
-        None = 0, 
+        None = 0,
         UP = 1,
         DOWN = 2,
         LEFT = 3,
@@ -14,7 +14,7 @@ namespace NETCoreBot.Enums
         DIGDOWN = 9,
         DIGLEFT = 10,
         DIGRIGHT = 11,
-        STEAL = 12,
-        RADAR = 13
+        RADAR = 12,
+        STEAL = 13,
     }
 }

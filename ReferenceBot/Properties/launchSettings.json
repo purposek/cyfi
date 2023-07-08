@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ReferenceBot": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "Token": "199700c0-1ccd-11ee-be56-0242ac120004"
+      }
+    }
+  }
+}
