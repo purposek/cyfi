@@ -10,32 +10,39 @@ namespace ReferenceBot.AI.DataStructures.Pathfinding
     {
         public int X;
         public int Y;
-        public string PreviousBotMovementState;
         public int ExpectedGameTickOffset;
         public int GCost;
         public int HCost;
         public bool Walkable;
         public InputCommand CommandToReachMe;
         public Node? Parent;
+        private MovementState expectedEndBotMovementState;
 
         public bool DugInDirection => CommandToReachMe == InputCommand.DIGDOWN || CommandToReachMe == InputCommand.DIGLEFT || CommandToReachMe == InputCommand.DIGRIGHT;
-        public string ExpectedBotMovementState { get; set; }
-        public bool JumpedInDirection { get; set; }
-        public int JumpHeight => JumpedInDirection ? (Parent == null ? 0 : Parent.JumpHeight + 1) : 0;
+        public MovementState ExpectedEndBotMovementState
+        {
+            get { return expectedEndBotMovementState; }
+            set => expectedEndBotMovementState = value;
+        }
+
+        public int JumpHeight { get; }
+        public Point DeltaToMe { get; set; } = new(0, 0);
 
         public int FCost => GCost + HCost;
 
-        public Node(int _X, int _Y, bool _Walkable,  Node? _parent, string previousBotMovementState, int expectedGameTickOffset, InputCommand commandToReachMe)
+        public bool CommandToMeEvaluable { get; }
+
+        public Node(int _X, int _Y, Node? _parent, MovementState expectedEndBotMovementState, int expectedGameTickOffset, InputCommand commandToReachMe, bool commandToMeEvaluable, int jumpHeight)
         {
             X = _X;
             Y = _Y;
-            Walkable = _Walkable;
             GCost = Parent != null ? Parent.GCost + 1 : 0;
             Parent = _parent;
-            PreviousBotMovementState = previousBotMovementState;
-            ExpectedBotMovementState = previousBotMovementState;
+            ExpectedEndBotMovementState = expectedEndBotMovementState;
             ExpectedGameTickOffset = expectedGameTickOffset;
             CommandToReachMe = commandToReachMe;
+            CommandToMeEvaluable = commandToMeEvaluable;
+            JumpHeight = jumpHeight;
         }
 
         public static implicit operator Point(Node n) => new(n.X, n.Y);

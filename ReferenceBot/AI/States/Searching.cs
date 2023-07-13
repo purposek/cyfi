@@ -16,6 +16,7 @@ namespace ReferenceBot.AI.States
         private bool IsSearching;
 
         public bool PathFound { get; private set; }
+        public bool Exploring { get; private set; }
 
         public SearchingState(BotStateMachine StateMachine) : base(StateMachine)
         { }
@@ -57,6 +58,7 @@ namespace ReferenceBot.AI.States
             Console.WriteLine("Searching for collectibles");
             IsSearching = true;
             PathFound = false;
+            Exploring = false;
             var playerBounds = new BoundingBox(BotState.X, BotState.Y, 2, 2);
 
             // Find all collectibles
@@ -66,9 +68,18 @@ namespace ReferenceBot.AI.States
                 {
                     for (int j = 0; j < 100; j++)
                     {
-                        if (WorldMapPerspective.KnownCoordinates[i][j] && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j)))
+                        if (WorldMapPerspective.KnownCoordinates[i][j])
                         {
-                            collectibles.Add(new Point(i, j));
+                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Ladder && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j)))
+                            { 
+                                collectibles.Add(new Point(i, j));
+                                Exploring = true;
+                            }
+                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Platform && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j + 1)))
+                            {
+                                collectibles.Add(new Point(i, j + 1));
+                                Exploring = true;
+                            }
                         }
                     }
                 }
@@ -137,7 +148,7 @@ namespace ReferenceBot.AI.States
             if (closestPath is Path)
             {
                 Console.WriteLine($"Closest path found of length {closestPath.Length}");
-                var newState = new Collecting(StateMachine, closestCollectibleByPath, closestPath);
+                var newState = new Collecting(StateMachine, closestCollectibleByPath, closestPath, Exploring);
                 ChangeState(newState);
                 PathFound = true;
             }

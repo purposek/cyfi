@@ -77,7 +77,7 @@ namespace Domain.Models
 
         public static bool BotIsOnStableFooting(Point position)
         {
-            return BotOnPlatform(position) || BotOnLadder(position) || BotOnSolid(position);
+            return BotOnPlatform(position) || BotOnLadder(position) || BotOnSolid(position) || BotContainsLadder(position);
         }
 
         public static bool BotOnLadder(Point position)

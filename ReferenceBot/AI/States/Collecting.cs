@@ -11,11 +11,13 @@ namespace ReferenceBot.AI.States
     {
         Point Collectible;
         Path PathToCollectible;
+        bool Exploring;
 
-        public Collecting(BotStateMachine _stateMachine, Point collectible, Path pathToCollectible) : base(_stateMachine)
+        public Collecting(BotStateMachine _stateMachine, Point collectible, Path pathToCollectible, bool exploring) : base(_stateMachine)
         {
             Collectible = collectible;
             PathToCollectible = pathToCollectible;
+            Exploring = exploring;
         }
 
         public override void EnterState(State PreviousState)
@@ -30,7 +32,7 @@ namespace ReferenceBot.AI.States
         public override InputCommand Update(BotStateDTO BotState)
         {
            var nextNode = PathToCollectible.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(BotState.CurrentPosition));
-           if(!WorldMapPerspective.Collectibles.Contains(Collectible) || nextNode == null) 
+           if((!Exploring && !WorldMapPerspective.Collectibles.Contains(Collectible)) || nextNode == null || WorldMapPerspective.BotBoundsContainPoint(BotState.CurrentPosition, Collectible)) 
             {
                 ChangeState(new SearchingState(StateMachine));
                 return InputCommand.None;
