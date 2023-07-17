@@ -17,6 +17,7 @@ namespace ReferenceBot.AI.DataStructures.Pathfinding
         public InputCommand CommandToReachMe;
         public Node? Parent;
         private MovementState expectedEndBotMovementState;
+        public int StepsToMe => Parent == null ? 0 : Parent.StepsToMe + 1;
 
         public bool DugInDirection => CommandToReachMe == InputCommand.DIGDOWN || CommandToReachMe == InputCommand.DIGLEFT || CommandToReachMe == InputCommand.DIGRIGHT;
         public MovementState ExpectedEndBotMovementState

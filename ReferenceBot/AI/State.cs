@@ -58,7 +58,7 @@ namespace ReferenceBot.AI
             {
                 var currentNode = openSet.First();
                 //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
-                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, endNode))
+                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, endNode) || currentNode.StepsToMe == 60)
                 {
                     //endNode.Parent = currentNode.Parent;
                     return ConstructPath(currentNode);
@@ -155,7 +155,6 @@ namespace ReferenceBot.AI
             Point deltaToCurrentNode = currentNode.DeltaToMe;
             bool jumping = false;
 
-            CommandToNeighbour commandToNeighbour;
             bool isAcceptableCommand;
             InputCommand inputCommand;
 
@@ -232,30 +231,14 @@ namespace ReferenceBot.AI
                     break;
             }
 
-            commandToNeighbour = (isAcceptableCommand, inputCommand);
-
             MovementState expectedBotMovementState = jumping && currentNode.JumpHeight < 3 ? MovementState.Jumping :
                 WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) ? MovementState.Idle :
                 MovementState.Falling;
 
             Node nextNode = new Node(neighbourPosition.X, neighbourPosition.Y, currentNode, expectedBotMovementState,
-                currentNode.ExpectedGameTickOffset + 1, commandToNeighbour.InputCommand, commandToNeighbour.AcceptableCommand, jumping ? currentNode.JumpHeight + 1 : 0);
+                currentNode.ExpectedGameTickOffset + 1, inputCommand, isAcceptableCommand, jumping ? currentNode.JumpHeight + 1 : 0);
 
             return nextNode;
-        }
-    }
-  
-
-    internal record struct CommandToNeighbour(bool AcceptableCommand, InputCommand InputCommand)
-    {
-        public static implicit operator (bool AcceptableCommand, InputCommand InputCommand)(CommandToNeighbour value)
-        {
-            return (value.AcceptableCommand, value.InputCommand);
-        }
-
-        public static implicit operator CommandToNeighbour((bool AcceptableCommand, InputCommand InputCommand) value)
-        {
-            return new CommandToNeighbour(value.AcceptableCommand, value.InputCommand);
         }
     }
 }

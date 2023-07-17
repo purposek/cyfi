@@ -121,9 +121,9 @@ namespace Domain.Models
         {
             if (BotOutOfBounds(position)) return true;
 
-            var containsSolid = BoundingBox(position).Any(point => ObjectCoordinates[point.X][point.Y] == ObjectType.Solid);
+            var containsSolidOrUnknown = BoundingBox(position).Any(point => ObjectCoordinates[point.X][point.Y] == ObjectType.Solid || !KnownCoordinates[point.X][point.Y]);
 
-            return !dugInDirection && containsSolid;
+            return !dugInDirection && containsSolidOrUnknown;
         }
 
         public static bool BotOutOfBounds(Point position)
