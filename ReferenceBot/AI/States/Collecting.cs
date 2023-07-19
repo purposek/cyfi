@@ -3,6 +3,7 @@ using Domain.Models;
 using System;
 using ReferenceBot.AI.DataStructures.Pathfinding;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace ReferenceBot.AI.States
 {
@@ -20,6 +21,8 @@ namespace ReferenceBot.AI.States
             Exploring = exploring;
         }
 
+        public int ChangeStateCooldown { get; private set; }
+
         public override void EnterState(State PreviousState)
         {
             Console.WriteLine("Entered Collecting");
@@ -29,15 +32,25 @@ namespace ReferenceBot.AI.States
         {
         }
 
-        public override InputCommand Update(BotStateDTO BotState)
+        public override InputCommand Update(BotStateDTO BotState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict)
         {
-           var nextNode = PathToCollectible.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(BotState.CurrentPosition));
-           if((!Exploring && !WorldMapPerspective.Collectibles.Contains(Collectible)) || nextNode == null || WorldMapPerspective.BotBoundsContainPoint(BotState.CurrentPosition, Collectible)) 
+            var gameTickToCheck = BotState.GameTick;
+            var stagnant = 0;
+            while (ChangeStateCooldown < 0 && stagnant < 3 && gameStateDict.ContainsKey(gameTickToCheck - 1) && gameStateDict[gameTickToCheck - 1].Position.Equals(gameStateDict[gameTickToCheck].Position))
             {
+                stagnant++;
+                gameTickToCheck--;
+            }
+
+            var nextNode = PathToCollectible.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(BotState.CurrentPosition));
+           if((!Exploring && !WorldMapPerspective.Collectibles.Contains(Collectible)) || stagnant > 2 || nextNode == null || WorldMapPerspective.BotBoundsContainPoint(BotState.CurrentPosition, Collectible)) 
+            {
+                ChangeStateCooldown = 1;
                 ChangeState(new SearchingState(StateMachine));
                 return InputCommand.None;
             }
 
+            ChangeStateCooldown--;
             return nextNode.CommandToReachMe;
         }
     }

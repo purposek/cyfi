@@ -6,23 +6,26 @@ using ReferenceBot.Services;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Diagnostics;
+using System.Globalization;
+using Domain.Enums;
+using System.Collections.Generic;
 
 namespace ReferenceBot
 {
-  public class Program
-  {
-
-    private static IConfigurationRoot Configuration;
-
-        private static bool gui = false;
-    private static void Main(string[] args)
+    public class Program
     {
+
+        private static IConfigurationRoot Configuration;
+        private static Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> GameStateDict = new Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)>();
+
+        private static void Main(string[] args)
+        {
             if (Environment.GetEnvironmentVariable("DOCKER") != null)
             {
                 Console.WriteLine("Docker detected, disabling GUI...");
-                gui = false;
             }
-            
+
             BotService botService = new();
 
             // Set up configuration sources.
@@ -81,8 +84,18 @@ namespace ReferenceBot
                 "ReceiveBotState",
                 (botState) =>
                 {
-                    BotCommand command = botService.ProcessState(botState);
+                    Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
+                    GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
+                    string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                    Console.WriteLine($"Recived at {timestamp}");
+                    Stopwatch sw = Stopwatch.StartNew();
+                    BotCommand command = botService.ProcessState(botState, GameStateDict);
+                    sw.Stop();
+                    Console.WriteLine($"Evaluating command took {sw.ElapsedMilliseconds}ms");
+                    timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                    Console.WriteLine($"Sent at {timestamp}");
                     connection.InvokeAsync("SendPlayerCommand", command);
+                    GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, command.Action, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
                 }
             );
 
@@ -98,8 +111,8 @@ namespace ReferenceBot
             while (connection.State == HubConnectionState.Connected || connection.State == HubConnectionState.Connecting)
             {
                 Thread.Sleep(300);
-                Console.WriteLine(connection.State);
+                //Console.WriteLine(connection.State);
             }
         }
-  }
+    }
 }

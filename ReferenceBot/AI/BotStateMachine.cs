@@ -21,10 +21,10 @@ namespace ReferenceBot.AI
             CurrentState = NewState;
         }
 
-        public InputCommand Update(BotStateDTO BotState)
+        public InputCommand Update(BotStateDTO BotState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict)
         {
             WorldMapPerspective.UpdateState(BotState);
-            return CurrentState.Update(BotState);
+            return CurrentState.Update(BotState, gameStateDict);
         }
     }
 }

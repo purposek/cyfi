@@ -2,6 +2,7 @@ using ReferenceBot.AI;
 using Domain.Enums;
 using Domain.Models;
 using System;
+using System.Collections.Generic;
 
 namespace ReferenceBot.Services
 {
@@ -15,9 +16,9 @@ namespace ReferenceBot.Services
         BotFSM = new();
     }
 
-    public BotCommand ProcessState(BotStateDTO BotState)
+    public BotCommand ProcessState(BotStateDTO BotState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict)
     {
-      InputCommand ActionToTake = BotFSM.Update(BotState);
+      InputCommand ActionToTake = BotFSM.Update(BotState, gameStateDict);
       return new BotCommand
       {
         BotId = BotId,

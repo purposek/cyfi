@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 using ReferenceBot.AI.DataStructures.Pathfinding;
-using System.Xml.Linq;
+using C5;
 
 namespace ReferenceBot.AI
 {
@@ -29,10 +29,10 @@ namespace ReferenceBot.AI
             StateMachine.ChangeState(NewState);
         }
 
-        public abstract InputCommand Update(BotStateDTO BotState);
+        public abstract InputCommand Update(BotStateDTO BotState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
 
-       // A* algorithm
-        protected static Path? PerformAStarSearch(Point start, Point end, string botMovementStateString)
+        // A* algorithm
+        protected static Path? PerformAStarSearch(Point start, Point end, string botMovementStateString, bool exploring, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict, int gameTick)
         {
             MovementState botMovementState;
             try
@@ -43,38 +43,46 @@ namespace ReferenceBot.AI
             {
                 botMovementState = MovementState.Idle; // Default value
             }
-            //TODO infer jump height too
-            var startNode = new Node(start.X, start.Y, null, botMovementState, 0, InputCommand.None, true, 0);
-            var endNode = new Node(end.X, end.Y, null, MovementState.Idle, 0, InputCommand.None, false, 0);
 
-            startNode.HCost = ManhattanDistance(start, end);
+            var jumpHeight = 0;
+            var gameTickToCheck = gameTick;
+            while (gameStateDict.ContainsKey(gameTickToCheck) && gameStateDict[gameTickToCheck].MovementState == "Jumping")
+            {
+                jumpHeight++;
+                gameTickToCheck--;
+            }
 
-            HashSet<Node> openSet = new();
-            HashSet<Node> closedSet = new();
+            var startNode = new Node(start.X, start.Y, null, botMovementState, 0, InputCommand.None, true, jumpHeight);
+            startNode.DeltaToMe = gameStateDict[gameTick].DeltaToPosition;
+
+            startNode.HCost = WorldMapPerspective.ManhattanDistance(start, end);
+
+            var openSet = new IntervalHeap<Node>(new NodeComparer());
+            var closedSet = new Dictionary<Node, bool>();
 
             openSet.Add(startNode);
 
             while (openSet.Count > 0)
             {
-                var currentNode = openSet.First();
+                var currentNode = openSet.DeleteMin();//openSet.First();
                 //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
-                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, endNode) || currentNode.StepsToMe == 60)
+                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && (currentNode.HCost < 10)) || currentNode.StepsToMe > 50)
                 {
                     //endNode.Parent = currentNode.Parent;
                     return ConstructPath(currentNode);
                 }
-                openSet.Remove(currentNode);
-                closedSet.Add(currentNode);
+                //openSet.Remove(currentNode);
+                closedSet[currentNode] = true;
 
-                var neighbours = Neighbours(currentNode, botMovementState);
+                var neighbours = Neighbours(currentNode, botMovementState, exploring);
 
                 foreach (var neighbour in neighbours)
                 {
-                    if (closedSet.Contains(neighbour))
+                    if (closedSet.ContainsKey(neighbour))
                     {
                         continue;
                     }
-                    neighbour.HCost = ManhattanDistance(neighbour, end);
+                    neighbour.HCost = WorldMapPerspective.ManhattanDistance(neighbour, end);
                     if (!openSet.Contains(neighbour))
                     {
                         openSet.Add(neighbour);
@@ -87,24 +95,24 @@ namespace ReferenceBot.AI
                         openNeighbour.Parent = neighbour.Parent;
                     }
                 }
-                openSet = openSet.OrderBy((node) => node.FCost).ToHashSet();
+                //openSet = openSet.OrderBy((node) => node.FCost).ToHashSet();
             }
 
             return null;
         }
 
-        private static HashSet<Node> Neighbours(Node node, MovementState currentBotMovementState)
+        private static C5.HashSet<Node> Neighbours(Node node, MovementState currentBotMovementState, bool exploring)
         {
-            var neighbours = new HashSet<Node>();
+            var neighbours = new C5.HashSet<Node>();
             for (int x = node.X - 1; x <= node.X + 1; x++)
             {
                 for (int y = node.Y - 1; y <= node.Y + 1; y++)
                 {
                     //TODO infer jump height and jumped from previous movements (if reevaluating and already in jumping). Therefore need to store last 3/4 positions and input
                     //also infer delta to me
-                    Node neighbour = MovementToNextNode(new Point(x, y), node);
+                    Node neighbour = MovementToNextNode(new Point(x, y), node, exploring);
 
-                    if ((y == node.Y && x == node.X) || !neighbour.CommandToMeEvaluable || !IsNodeReachable(node))
+                    if ((y == node.Y && x == node.X) || !neighbour.CommandToMeEvaluable || !IsNodeReachable(neighbour, exploring))
                     {
                         continue;
                     }
@@ -128,9 +136,9 @@ namespace ReferenceBot.AI
             return path;
         }
 
-        private static bool IsNodeReachable(Node node)
+        private static bool IsNodeReachable(Node node, bool exploring)
         {
-            if (WorldMapPerspective.BotOnHazard(node) || WorldMapPerspective.BotInUnachievablePosition(node, node.DugInDirection) || WorldMapPerspective.BotOutOfBounds(node))
+            if (WorldMapPerspective.BotOnHazard(node) || WorldMapPerspective.BotInUnachievablePosition(node, node.DugInDirection, exploring) || WorldMapPerspective.BotOutOfBounds(node))
             {
                 return false;
             }
@@ -138,14 +146,7 @@ namespace ReferenceBot.AI
             return true;
         }
 
-        // Calculate cost using manhattan distance as a heuristic.
-        protected static int ManhattanDistance(Point currentPoint, Point goal)
-        {
-            return Math.Abs(currentPoint.X -  goal.X) + Math.Abs(currentPoint.Y - goal.Y);
-        }
-
-
-        private static Node MovementToNextNode(Point neighbourPosition, Node currentNode)
+        private static Node MovementToNextNode(Point neighbourPosition, Node currentNode, bool exploring)
         {
             Point deltaToNeighbour = new Point(neighbourPosition.X - currentNode.X, neighbourPosition.Y - currentNode.Y);
             MovementState currentBotMovementState = currentNode.ExpectedEndBotMovementState;
@@ -156,18 +157,20 @@ namespace ReferenceBot.AI
             bool jumping = false;
 
             bool isAcceptableCommand;
+            bool jumpDeltaYReverting = currentNode.JumpHeight == 3 || WorldMapPerspective.BotInUnachievablePosition(new Point(currentNode.X + currentNode.DeltaToMe.X, currentNode.Y + currentNode.DeltaToMe.Y), false, exploring);
+            bool jumpDeltaXReverting = currentNode.JumpHeight < 3 && WorldMapPerspective.BotInUnachievablePosition(new Point(currentNode.X + currentNode.DeltaToMe.X, currentNode.Y + currentNode.DeltaToMe.Y), false, exploring);
             InputCommand inputCommand;
 
             switch (deltaToNeighbour)
             {
                 case var delta when delta.X == 1 && delta.Y == 1:
-                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
-                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && currentBotMovementState != MovementState.Falling && currentJumpHeight < 3;
+                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
+                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && currentBotMovementState != MovementState.Falling && currentJumpHeight < 3;
                     inputCommand = currentBotMovementState switch
                     {
                         MovementState.Jumping => deltaToCurrentNode.Equals(deltaToNeighbour) ? InputCommand.None : InputCommand.RIGHT,
                         MovementState.Idle => InputCommand.UPRIGHT,
-                        _ => InputCommand.None 
+                        _ => InputCommand.None
                     };
                     break;
                 case var delta when delta.X == 1 && delta.Y == 0:
@@ -176,7 +179,7 @@ namespace ReferenceBot.AI
                     break;
 
                 case var delta when delta.X == 1 && delta.Y == -1:
-                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && currentBotMovementState != MovementState.Jumping;
+                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentBotMovementState != MovementState.Jumping || (jumpDeltaYReverting && !jumpDeltaXReverting));
                     inputCommand = currentBotMovementState switch
                     {
                         MovementState.Falling => deltaToCurrentNode.Equals(deltaToNeighbour) ? InputCommand.None : InputCommand.RIGHT,
@@ -185,8 +188,8 @@ namespace ReferenceBot.AI
                     };
                     break;
                 case var delta when delta.X == 0 && delta.Y == 1:
-                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
-                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && (currentBotMovementState == MovementState.Idle || (currentBotMovementState == MovementState.Jumping && deltaToCurrentNode.Equals(deltaToNeighbour) && currentJumpHeight < 3));
+                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
+                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentBotMovementState == MovementState.Idle || (currentBotMovementState == MovementState.Jumping && deltaToCurrentNode.Equals(deltaToNeighbour) && currentJumpHeight < 3));
                     inputCommand = currentBotMovementState switch
                     {
                         MovementState.Idle => InputCommand.UP,
@@ -194,7 +197,7 @@ namespace ReferenceBot.AI
                     };
                     break;
                 case var delta when delta.X == 0 && delta.Y == -1:
-                    isAcceptableCommand = currentBotMovementState == MovementState.Idle || (currentBotMovementState == MovementState.Falling && deltaToCurrentNode.Equals(deltaToNeighbour));
+                    isAcceptableCommand = currentBotMovementState == MovementState.Idle || (currentBotMovementState == MovementState.Falling && deltaToCurrentNode.Equals(deltaToNeighbour)) || jumpDeltaYReverting && jumpDeltaXReverting;
                     inputCommand = currentBotMovementState switch
                     {
                         MovementState.Idle => InputCommand.DIGDOWN,
@@ -202,8 +205,8 @@ namespace ReferenceBot.AI
                     };
                     break;
                 case var delta when delta.X == -1 && delta.Y == 1:
-                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
-                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && (currentBotMovementState != MovementState.Falling && currentJumpHeight < 3);
+                    jumping = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentNode.ExpectedEndBotMovementState == MovementState.Jumping || !WorldMapPerspective.BotContainsLadder(currentNode));
+                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentBotMovementState != MovementState.Falling && currentJumpHeight < 3);
                     inputCommand = currentBotMovementState switch
                     {
                         MovementState.Jumping => deltaToCurrentNode.Equals(deltaToNeighbour) ? InputCommand.None : InputCommand.LEFT,
@@ -216,7 +219,7 @@ namespace ReferenceBot.AI
                     inputCommand = InputCommand.DIGLEFT;
                     break;
                 case var delta when delta.X == -1 && delta.Y == -1:
-                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false) && currentBotMovementState != MovementState.Jumping;
+                    isAcceptableCommand = !WorldMapPerspective.BotInUnachievablePosition(neighbourPosition, false, exploring) && (currentBotMovementState != MovementState.Jumping || (jumpDeltaYReverting && !jumpDeltaXReverting));
 
                     inputCommand = currentBotMovementState switch
                     {
@@ -231,7 +234,7 @@ namespace ReferenceBot.AI
                     break;
             }
 
-            MovementState expectedBotMovementState = jumping && currentNode.JumpHeight < 3 ? MovementState.Jumping :
+            MovementState expectedBotMovementState = jumping && currentNode.JumpHeight < 2 ? MovementState.Jumping :
                 WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) ? MovementState.Idle :
                 MovementState.Falling;
 
@@ -239,6 +242,14 @@ namespace ReferenceBot.AI
                 currentNode.ExpectedGameTickOffset + 1, inputCommand, isAcceptableCommand, jumping ? currentNode.JumpHeight + 1 : 0);
 
             return nextNode;
+        }
+    }
+
+    public class NodeComparer : IComparer<Node>
+    {
+        public int Compare(Node x, Node y)
+        {
+            return x.FCost.CompareTo(y.FCost);
         }
     }
 }

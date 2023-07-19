@@ -117,11 +117,11 @@ namespace Domain.Models
             return hazardBelow || containsHazard;
         }
 
-        public static bool BotInUnachievablePosition(Point position, bool dugInDirection)
+        public static bool BotInUnachievablePosition(Point position, bool dugInDirection, bool exploring)
         {
             if (BotOutOfBounds(position)) return true;
 
-            var containsSolidOrUnknown = BoundingBox(position).Any(point => ObjectCoordinates[point.X][point.Y] == ObjectType.Solid || !KnownCoordinates[point.X][point.Y]);
+            var containsSolidOrUnknown = BoundingBox(position).Any(point => ObjectCoordinates[point.X][point.Y] == ObjectType.Solid || (!exploring && !KnownCoordinates[point.X][point.Y]));
 
             return !dugInDirection && containsSolidOrUnknown;
         }
@@ -147,5 +147,11 @@ namespace Domain.Models
         {
             return !BotOutOfBounds(point) && BoundingBox(point).Any(p => !KnownCoordinates[p.X][p.Y]);
         }
+
+        public static int ManhattanDistance(Point currentPoint, Point goal)
+        {
+            return Math.Abs(currentPoint.X - goal.X) + Math.Abs(currentPoint.Y - goal.Y);
+        }
+
     }
 }

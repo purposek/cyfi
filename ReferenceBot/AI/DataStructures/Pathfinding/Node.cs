@@ -6,7 +6,7 @@ using System.Collections.Generic;
 namespace ReferenceBot.AI.DataStructures.Pathfinding
 {
     // A node for use in pathfinding.
-    class Node : IEquatable<Node>
+    public class Node : IEquatable<Node>
     {
         public int X;
         public int Y;
