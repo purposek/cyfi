@@ -87,11 +87,14 @@ namespace ReferenceBot
                     Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
                     string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
-                    Console.WriteLine($"Recived at {timestamp}");
+                    Console.WriteLine($"Received at {timestamp}");
                     Stopwatch sw = Stopwatch.StartNew();
                     BotCommand command = botService.ProcessState(botState, GameStateDict);
                     sw.Stop();
-                    Console.WriteLine($"Evaluating command took {sw.ElapsedMilliseconds}ms");
+                    var ticks = sw.ElapsedTicks;
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
+                    Console.ResetColor();
                     timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
                     Console.WriteLine($"Sent at {timestamp}");
                     connection.InvokeAsync("SendPlayerCommand", command);
