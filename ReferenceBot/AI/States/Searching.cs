@@ -77,12 +77,12 @@ namespace ReferenceBot.AI.States
             //Stopwatch sw = Stopwatch.StartNew();
             // Calculate which collectible has the shortest path
             Point closestCollectibleByPath = closestCollectibles.First();
-            Path? closestPath = PerformAStarSearch(playerBounds.Position, closestCollectibleByPath, BotState.CurrentState, Exploring, gameStateDict, BotState.GameTick);
+            Path? closestPath = PerformBFS(playerBounds.Position, closestCollectibleByPath, BotState.CurrentState, Exploring, gameStateDict, BotState.GameTick);
             foreach (var collectible in closestCollectibles.Skip(1))
             {
                 int closestPathDistance = closestPath is Path path ? path.Length : Int32.MaxValue;
                 Console.WriteLine("Finding path");
-                var newPath = PerformAStarSearch(playerBounds.Position, collectible, BotState.CurrentState, Exploring, gameStateDict, BotState.GameTick);
+                var newPath = PerformBFS(playerBounds.Position, collectible, BotState.CurrentState, Exploring, gameStateDict, BotState.GameTick);
                 if (newPath != null)
                 {
                     Console.WriteLine($"Found path of length {newPath.Length}");
@@ -158,13 +158,13 @@ namespace ReferenceBot.AI.States
             // Find all collectibles
             List<Point> collectibles = new List<Point>();
 
-            for (int i = 0; i < 100; i++)
+            for (int i = 0; i < WorldMapPerspective.MapXLength; i++)
             {
-                for (int j = 0; j < 100; j++)
+                for (int j = 0; j < WorldMapPerspective.MapYLength; j++)
                 {
                     if (WorldMapPerspective.KnownCoordinates[i][j])
                     {
-                        if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Ladder && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j)))
+                        if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Ladder && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j), true))
                         {
                             collectibles.Add(new Point(i, j));
                             Exploring = true;
@@ -185,9 +185,17 @@ namespace ReferenceBot.AI.States
                 //TODO find dig algo
                 for (int i = 0; i < 4; i++)
                 {
-                    collectibles.Add(new Point(random.Next(0, 100), random.Next(0, 100)));
+                    GaussianRandom gaussianRandom = new GaussianRandom();
+                    int yCoord = (int)gaussianRandom.NextGaussian(70, 20);
+                    var xCoord = random.Next(0, WorldMapPerspective.MapXLength);
+                    while (yCoord >= WorldMapPerspective.MapYLength || yCoord < 0 || WorldMapPerspective.ObjectCoordinates[xCoord][yCoord] != ObjectType.Solid)
+                    {
+                        xCoord = random.Next(0, WorldMapPerspective.MapXLength);
+                        yCoord = (int)gaussianRandom.NextGaussian(70, 20);
+                    }
+                    
+                    collectibles.Add(new Point(xCoord, yCoord));
                     Exploring = true;
-
                 }
                 //var newState = new Digging(StateMachine);
                 //ChangeState(newState);
@@ -255,6 +263,23 @@ namespace ReferenceBot.AI.States
                 //ChangeState(newState);
 
             }
+        }
+    }
+
+    public class GaussianRandom
+    {
+        private Random random = new Random();
+
+        public double NextGaussian(double mean, double standardDeviation)
+        {
+            double u1 = 1.0 - random.NextDouble(); // Uniform random number from 0 to 1
+            double u2 = 1.0 - random.NextDouble(); // Uniform random number from 0 to 1
+
+            // Use Box-Muller transform to generate numbers with a Gaussian distribution
+            double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+
+            // Scale and shift the distribution to match the desired mean and standard deviation
+            return mean + standardDeviation * randStdNormal;
         }
     }
 }

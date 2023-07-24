@@ -4,6 +4,9 @@ namespace Domain.Models
 {
     public static class WorldMapPerspective
     {
+        // Define the map size constants
+        public const int MapXLength = 100;
+        public const int MapYLength = 100;
 
         public static bool[][] KnownCoordinates { get; }
         public static List<Point> Collectibles { get; }
@@ -14,12 +17,12 @@ namespace Domain.Models
         static WorldMapPerspective()
         {
             Collectibles = new List<Point>();
-            ObjectCoordinates = new ObjectType[100][];
-            KnownCoordinates = new bool[100][];
-            for (int i = 0; i < 100; i++)
+            ObjectCoordinates = new ObjectType[MapXLength][];
+            KnownCoordinates = new bool[MapXLength][];
+            for (int i = 0; i < MapXLength; i++)
             {
-                ObjectCoordinates[i] = new ObjectType[100];
-                KnownCoordinates[i] = new bool[100];
+                ObjectCoordinates[i] = new ObjectType[MapYLength];
+                KnownCoordinates[i] = new bool[MapYLength];
             }
         }
 
@@ -39,9 +42,9 @@ namespace Domain.Models
             {
                 Collectibles.Clear();
                 level = botState.CurrentLevel;
-                for (int i = 0; i < 100; i++)
+                for (int i = 0; i < MapXLength; i++)
                 {
-                    for (int j = 0; j < 100; j++)
+                    for (int j = 0; j < MapYLength; j++)
                     {
                         SetCoordinates(i, j, (int)ObjectType.Air);
                         SetKnownCoordinates(i, j, false);
@@ -55,7 +58,7 @@ namespace Domain.Models
                 {
                     var worldX = botState.X + i - 16;
                     var worldY = botState.Y + j - 10;
-                    if (worldX >= 0 && worldX < 100 && worldY >= 0 && worldY < 100)
+                    if (worldX >= 0 && worldX < MapXLength && worldY >= 0 && worldY < MapYLength)
                     {
                         SetCoordinates(worldX, worldY, (ObjectType)botState.HeroWindow[i][j]);
                         SetKnownCoordinates(worldX, worldY, true);
@@ -128,7 +131,7 @@ namespace Domain.Models
 
         public static bool BotOutOfBounds(Point position)
         {
-            return BoundingBox(position).Any(point => point.X < 0 || point.X > 99 || point.Y < 0 || point.Y > 99);
+            return BoundingBox(position).Any(point => point.X < 0 || point.X >= MapXLength || point.Y < 0 || point.Y >= MapYLength);
         }
         public static Point[] BoundingBox(Point position) => new Point[]
         {
@@ -136,6 +139,13 @@ namespace Domain.Models
             new Point(position.X,  position.Y + 1),
             new Point(position.X + 1,  position.Y),
             new Point(position.X + 1,  position.Y + 1)
+        };
+        public static Point[] BoundingBox(Point position, bool wider) => new Point[]
+        {
+            new Point(position.X + 1,  position.Y + 1),
+            new Point(position.X - 1,  position.Y - 1),
+            new Point(position.X - 1,  position.Y + 1),
+            new Point(position.X + 1,  position.Y - 1)
         };
 
         public static bool BotBoundsContainPoint(Point currentNode, Point endNode)
@@ -146,6 +156,11 @@ namespace Domain.Models
         public static bool BoundingBoxHasUnknown(Point point)
         {
             return !BotOutOfBounds(point) && BoundingBox(point).Any(p => !KnownCoordinates[p.X][p.Y]);
+        }
+
+        public static bool BoundingBoxHasUnknown(Point point, bool wider)
+        {
+            return BoundingBox(point, wider).Any(p => !KnownCoordinates[p.X][p.Y]);
         }
 
         public static int ManhattanDistance(Point currentPoint, Point goal)

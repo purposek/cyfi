@@ -1,5 +1,6 @@
 ﻿using Domain.Enums;
 using Domain.Models;
+using ReferenceBot.AI.DataStructures.Pathfinding;
 using System;
 using System.Collections.Generic;
 

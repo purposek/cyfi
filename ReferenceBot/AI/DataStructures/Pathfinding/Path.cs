@@ -1,4 +1,6 @@
-﻿using System;
+﻿using C5;
+using Domain.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace ReferenceBot.AI.DataStructures.Pathfinding
 {
-    class Path
+    public class Path
     {
         public List<Node> Nodes;
 
@@ -26,6 +28,23 @@ namespace ReferenceBot.AI.DataStructures.Pathfinding
         }
 
         public int Length => Nodes.Count;
+
     }
+
+    public static class PathExtensions
+    {
+        public static HashDictionary<Point, Node> ToDictionary(this Path path)
+        {
+            var nodeDictionary = new HashDictionary<Point, Node>();
+
+            foreach (var node in path.Nodes)
+            {
+                if (node.Parent != null && !nodeDictionary.Contains(node.Parent)) nodeDictionary[node.Parent] = node;
+            }
+
+            return nodeDictionary;
+        }
+    }
+
 
 }

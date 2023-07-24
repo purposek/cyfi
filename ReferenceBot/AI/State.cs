@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 using ReferenceBot.AI.DataStructures.Pathfinding;
+using System.Xml.Linq;
 using C5;
 
 namespace ReferenceBot.AI
@@ -66,7 +67,7 @@ namespace ReferenceBot.AI
             {
                 var currentNode = openSet.DeleteMin();//openSet.First();
                 //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
-                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && (currentNode.HCost < 10)) || currentNode.StepsToMe > 50)
+                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && (currentNode.HCost < 10)))
                 {
                     //endNode.Parent = currentNode.Parent;
                     return ConstructPath(currentNode);
@@ -101,6 +102,63 @@ namespace ReferenceBot.AI
             return null;
         }
 
+        // Breadth First Search algorithm
+        protected static Path? PerformBFS(Point start, Point end, string botMovementStateString, bool exploring, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict, int gameTick)
+        {
+            MovementState botMovementState;
+            try
+            {
+                botMovementState = (MovementState)Enum.Parse(typeof(MovementState), botMovementStateString);
+            }
+            catch (ArgumentException)
+            {
+                botMovementState = MovementState.Idle; // Default value
+            }
+
+            var jumpHeight = 0;
+            var gameTickToCheck = gameTick;
+            while (gameStateDict.ContainsKey(gameTickToCheck) && gameStateDict[gameTickToCheck].MovementState == "Jumping")
+            {
+                jumpHeight++;
+                gameTickToCheck--;
+            }
+
+            var startNode = new Node(start.X, start.Y, null, botMovementState, 0, InputCommand.None, true, jumpHeight);
+            startNode.DeltaToMe = gameStateDict[gameTick].DeltaToPosition;
+
+            startNode.HCost = WorldMapPerspective.ManhattanDistance(start, end);
+
+            var openQueue = new Queue<Node>();
+            var closedSet = new C5.HashSet<Node>();
+
+            openQueue.Enqueue(startNode);
+            closedSet.Add(startNode);
+
+            while (openQueue.Count > 0)
+            {
+                var currentNode = openQueue.Dequeue();
+                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && (currentNode.HCost < 10)))
+                {
+                    return ConstructPath(currentNode);
+                }
+
+                var neighbours = Neighbours(currentNode, botMovementState, exploring);
+
+                foreach (var neighbour in neighbours)
+                {
+                    if (closedSet.Contains(neighbour))
+                    {
+                        continue;
+                    }
+                    neighbour.HCost = WorldMapPerspective.ManhattanDistance(neighbour, end);
+                    openQueue.Enqueue(neighbour);
+                    closedSet.Add(neighbour);
+                }
+            }
+
+            return null;
+        }
+
         private static C5.HashSet<Node> Neighbours(Node node, MovementState currentBotMovementState, bool exploring)
         {
             var neighbours = new C5.HashSet<Node>();
@@ -108,8 +166,6 @@ namespace ReferenceBot.AI
             {
                 for (int y = node.Y - 1; y <= node.Y + 1; y++)
                 {
-                    //TODO infer jump height and jumped from previous movements (if reevaluating and already in jumping). Therefore need to store last 3/4 positions and input
-                    //also infer delta to me
                     Node neighbour = MovementToNextNode(new Point(x, y), node, exploring);
 
                     if ((y == node.Y && x == node.X) || !neighbour.CommandToMeEvaluable || !IsNodeReachable(neighbour, exploring))
@@ -150,7 +206,7 @@ namespace ReferenceBot.AI
         {
             Point deltaToNeighbour = new Point(neighbourPosition.X - currentNode.X, neighbourPosition.Y - currentNode.Y);
             MovementState currentBotMovementState = currentNode.ExpectedEndBotMovementState;
-            //TODO consider falling trajectory
+
             if (currentBotMovementState == MovementState.Falling && WorldMapPerspective.BotIsOnStableFooting(currentNode)) currentBotMovementState = MovementState.Idle;
             int currentJumpHeight = currentNode.JumpHeight;
             Point deltaToCurrentNode = currentNode.DeltaToMe;
@@ -235,8 +291,7 @@ namespace ReferenceBot.AI
             }
 
             MovementState expectedBotMovementState = jumping && currentNode.JumpHeight < 2 ? MovementState.Jumping :
-                WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) ? MovementState.Idle :
-                MovementState.Falling;
+                WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) ? MovementState.Idle : MovementState.Falling;
 
             Node nextNode = new Node(neighbourPosition.X, neighbourPosition.Y, currentNode, expectedBotMovementState,
                 currentNode.ExpectedGameTickOffset + 1, inputCommand, isAcceptableCommand, jumping ? currentNode.JumpHeight + 1 : 0);
