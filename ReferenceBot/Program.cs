@@ -92,13 +92,20 @@ namespace ReferenceBot
                     BotCommand command = botService.ProcessState(botState, GameStateDict);
                     sw.Stop();
                     var ticks = sw.ElapsedTicks;
-                    //Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.ForegroundColor = ConsoleColor.Cyan;
                     Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
-                    //Console.ResetColor();
+                    Console.ResetColor();
                     timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
                     Console.WriteLine($"Sent {command.Action} at {timestamp}");
                     connection.InvokeAsync("SendPlayerCommand", command);
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, command.Action, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
+
+                    if (botState.GameTick > 2 && GameStateDict[botState.GameTick].Position.Equals(GameStateDict[botState.GameTick - 1].Position))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"************** No mvt at tick {botState.GameTick} **************");
+                        Console.ResetColor();
+                    }
                 }
             );
 
