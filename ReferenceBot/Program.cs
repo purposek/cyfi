@@ -10,6 +10,9 @@ using System.Diagnostics;
 using System.Globalization;
 using Domain.Enums;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using ReferenceBot.Services.Interfaces;
 
 namespace ReferenceBot
 {
@@ -17,16 +20,19 @@ namespace ReferenceBot
     {
 
         private static IConfigurationRoot Configuration;
-        private static Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> GameStateDict = new Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)>();
 
+        private static bool gui = true;
+        private static Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> GameStateDict = new();
         private static void Main(string[] args)
         {
-            if (Environment.GetEnvironmentVariable("DOCKER") != null)
-            {
-                Console.WriteLine("Docker detected, disabling GUI...");
-            }
+            // Set up configuration sources.
+            using var host = CreateHostBuilder(args).Build();
 
-            BotService botService = new();
+            using var serviceScope = host.Services.CreateScope();
+            var provider = serviceScope.ServiceProvider;
+
+            var pathfindingService = provider.GetRequiredService<IPathfindingService>();
+            var pathTraversalService = provider.GetRequiredService<IPathTraversalService>();
 
             // Set up configuration sources.
             var builder = new ConfigurationBuilder().AddJsonFile(
@@ -68,7 +74,7 @@ namespace ReferenceBot
 
             connection.On<Guid>("Registered", (id) =>
             {
-                botService.SetBotId(id);
+                pathTraversalService.SetBotId(id);
             });
 
             connection.On<String>(
@@ -84,20 +90,20 @@ namespace ReferenceBot
                 "ReceiveBotState",
                 (botState) =>
                 {
-                    Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
-                    GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
                     string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
                     Console.WriteLine($"Received at {timestamp}");
                     Stopwatch sw = Stopwatch.StartNew();
-                    BotCommand command = botService.ProcessState(botState, GameStateDict);
+                    Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
+                    GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
+                    BotCommand command = pathTraversalService.NextCommand(botState, GameStateDict);
+                    connection.InvokeAsync("SendPlayerCommand", command);
                     sw.Stop();
+
+                    WorldMapPerspective.UpdateState(botState);
+
                     var ticks = sw.ElapsedTicks;
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
-                    Console.ResetColor();
                     timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
                     Console.WriteLine($"Sent {command.Action} at {timestamp}");
-                    connection.InvokeAsync("SendPlayerCommand", command);
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, command.Action, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
 
                     if (botState.GameTick > 2 && GameStateDict[botState.GameTick].Position.Equals(GameStateDict[botState.GameTick - 1].Position))
@@ -106,6 +112,9 @@ namespace ReferenceBot
                         Console.WriteLine($"************** No mvt at tick {botState.GameTick} **************");
                         Console.ResetColor();
                     }
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
+                    Console.ResetColor();
                 }
             );
 
@@ -123,6 +132,19 @@ namespace ReferenceBot
                 Thread.Sleep(300);
                 //Console.WriteLine(connection.State);
             }
+        }
+
+
+        private static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args).ConfigureServices(GetServiceConfiguration);
+
+        private static void GetServiceConfiguration(HostBuilderContext _, IServiceCollection services)
+        {
+            var builder = new ConfigurationBuilder().AddJsonFile($"appsettings.json", optional: false);
+            Configuration = builder.Build();
+
+            services.AddSingleton<IPathfindingService, PathfindingService>();
+            services.AddSingleton<IPathTraversalService, PathTraversalService>();
         }
     }
 }

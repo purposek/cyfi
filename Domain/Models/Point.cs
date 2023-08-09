@@ -32,5 +32,10 @@ namespace Domain.Models
         {
             return new(a.X - b.X, a.Y - b.Y);
         }
+
+        public override string ToString()
+        {
+            return $"(X{X}, Y{Y})";
+        }
     }
 }

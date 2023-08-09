@@ -13,6 +13,7 @@ namespace Domain.Models
         private static int level;
 
         public static ObjectType[][] ObjectCoordinates { get; }
+        public static bool DiggingMode { get; set; }
 
         static WorldMapPerspective()
         {
@@ -62,15 +63,15 @@ namespace Domain.Models
                     {
                         SetCoordinates(worldX, worldY, (ObjectType)botState.HeroWindow[i][j]);
                         SetKnownCoordinates(worldX, worldY, true);
-
-                        if (Collectibles.Contains(new Point(worldX, worldY)) && (ObjectType)botState.HeroWindow[i][j] != ObjectType.Collectible)
+                        var currentPoint = new Point(worldX, worldY);
+                        if (Collectibles.Contains(currentPoint) && (ObjectType)botState.HeroWindow[i][j] != ObjectType.Collectible)
                         {
-                            Collectibles.Remove(new Point(worldX, worldY));
+                            Collectibles.Remove(currentPoint);
                         }
 
-                        if ((ObjectType)botState.HeroWindow[i][j] == ObjectType.Collectible && !Collectibles.Contains(new Point(worldX, worldY)))
+                        if ((ObjectType)botState.HeroWindow[i][j] == ObjectType.Collectible && !Collectibles.Contains(currentPoint))
                         {
-                            Collectibles.Add(new Point(worldX, worldY));
+                            Collectibles.Add(currentPoint);
                         }
                     }
                 }
@@ -158,15 +159,39 @@ namespace Domain.Models
             return !BotOutOfBounds(point) && BoundingBox(point).Any(p => !KnownCoordinates[p.X][p.Y]);
         }
 
+        public static bool BoundingBoxHasSolid(Point point, bool[][] dug)
+        {
+            return !BotOutOfBounds(point) && BoundingBox(point).Any(p => ObjectCoordinates[p.X][p.Y] == ObjectType.Solid && !dug[p.X][p.Y]);
+        }
+
         public static bool BoundingBoxHasUnknown(Point point, bool wider)
         {
-            return BoundingBox(point, wider).Any(p => !KnownCoordinates[p.X][p.Y]);
+            return BoundingBox(point, wider).Any(p => p.X >= 0 && p.Y >= 0 && p.X < MapXLength && p.Y < MapYLength && !KnownCoordinates[p.X][p.Y]);
         }
 
         public static int ManhattanDistance(Point currentPoint, Point goal)
         {
             return Math.Abs(currentPoint.X - goal.X) + Math.Abs(currentPoint.Y - goal.Y);
         }
+        public static List<Point> NextSolidContainingPoints(Point currentPoint, bool[][] dug)
+        {
+            List<Point> consideredPoints = new();
 
+            int[][] directions = new int[3][];
+            directions[0] = new int[] { -1, 0 }; 
+            directions[1] = new int[] { 0, -1 }; 
+            directions[2] = new int[] { 1, 0 };   
+
+            foreach (int[] direction in directions)
+            {
+                int x = currentPoint.X + direction[0];
+                int y = currentPoint.Y + direction[1];
+                Point nextPoint = new(x, y);
+
+                if (BoundingBoxHasSolid(nextPoint, dug)) consideredPoints.Add(nextPoint);
+            }
+
+            return consideredPoints;
+        }
     }
 }

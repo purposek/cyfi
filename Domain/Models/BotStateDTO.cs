@@ -15,6 +15,5 @@ namespace Domain.Models
         public int X { get; set; }
         public int Y { get; set; }
         public Point CurrentPosition => new Point(X, Y);
-        public Dictionary<int, (Point CurrentPoint, string CurrentState, InputCommand CommandSent, bool Jumping, int JumpHeight, Point ExpectedResultantPoint, string ExpectedResultantState)> GameStateDict { get; set; }
     }
 }

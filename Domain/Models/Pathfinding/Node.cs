@@ -1,10 +1,6 @@
 ﻿using Domain.Enums;
-using Domain.Models;
-using ReferenceBot.AI.DataStructures.Pathfinding;
-using System;
-using System.Collections.Generic;
 
-namespace ReferenceBot.AI.DataStructures.Pathfinding
+namespace Domain.Models.Pathfinding
 {
     // A node for use in pathfinding.
     public class Node : IEquatable<Node>
@@ -14,7 +10,6 @@ namespace ReferenceBot.AI.DataStructures.Pathfinding
         public int ExpectedGameTickOffset;
         public int GCost;
         public int HCost;
-        public bool Walkable;
         public InputCommand CommandToReachMe;
         public Node? Parent;
         private MovementState expectedEndBotMovementState;
@@ -37,8 +32,8 @@ namespace ReferenceBot.AI.DataStructures.Pathfinding
         {
             X = _X;
             Y = _Y;
-            GCost = Parent != null ? Parent.GCost + 1 : 0;
             Parent = _parent;
+            GCost = Parent != null ? Parent.GCost + 1 : 0;
             ExpectedEndBotMovementState = expectedEndBotMovementState;
             ExpectedGameTickOffset = expectedGameTickOffset;
             CommandToReachMe = commandToReachMe;
