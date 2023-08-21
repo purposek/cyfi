@@ -25,6 +25,7 @@ namespace ReferenceBot
         private static Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> GameStateDict = new();
         private static void Main(string[] args)
         {
+
             // Set up configuration sources.
             using var host = CreateHostBuilder(args).Build();
 
@@ -33,6 +34,7 @@ namespace ReferenceBot
 
             var pathfindingService = provider.GetRequiredService<IPathfindingService>();
             var pathTraversalService = provider.GetRequiredService<IPathTraversalService>();
+            var adversarialDecisionService = provider.GetRequiredService<IAdversarialDecisionService>();
 
             // Set up configuration sources.
             var builder = new ConfigurationBuilder().AddJsonFile(
@@ -91,30 +93,33 @@ namespace ReferenceBot
                 (botState) =>
                 {
                     string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
-                    Console.WriteLine($"Received at {timestamp}");
                     Stopwatch sw = Stopwatch.StartNew();
-                    Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
+                    PositionHistory.AddPosition(botState.CurrentPosition);
                     BotCommand command = pathTraversalService.NextCommand(botState, GameStateDict);
+                    command = adversarialDecisionService.NextCommand(command, botState, GameStateDict);
+                    //if (command.Action == InputCommand.EVADE) command = pathTraversalService.NextEvasiveCommand(botState, GameStateDict);
                     connection.InvokeAsync("SendPlayerCommand", command);
+                    CommandHistory.AddCommand(command.Action);
                     sw.Stop();
 
                     WorldMapPerspective.UpdateState(botState);
+                    Console.WriteLine($"Received at {timestamp}");
+                    Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
 
                     var ticks = sw.ElapsedTicks;
                     timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
+                    Console.ResetColor();
                     Console.WriteLine($"Sent {command.Action} at {timestamp}");
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, command.Action, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
-
                     if (botState.GameTick > 2 && GameStateDict[botState.GameTick].Position.Equals(GameStateDict[botState.GameTick - 1].Position))
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"************** No mvt at tick {botState.GameTick} **************");
                         Console.ResetColor();
                     }
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
-                    Console.ResetColor();
                 }
             );
 
@@ -145,6 +150,7 @@ namespace ReferenceBot
 
             services.AddSingleton<IPathfindingService, PathfindingService>();
             services.AddSingleton<IPathTraversalService, PathTraversalService>();
+            services.AddSingleton<IAdversarialDecisionService, AdversarialDecisionService>();
         }
     }
 }

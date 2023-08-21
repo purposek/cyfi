@@ -15,13 +15,22 @@ namespace ReferenceBot.Services
         private bool[][] dug;
 
         public event EventHandler<Path> BestPathFound;
-        public event EventHandler<Path> SubsequentBestPathFound;
         public List<Point> pointsToExclude = new();
+        private int pathfindFailures;
+        private bool amDesperate;
+
+        public bool Busy { get; set; }
 
         public Path FindBestPath(Point startPosition, Point deltaToStartPosition, MovementState botMovementStateAtStart, int jumpHeightAtStart, PathType pathType, bool clearExcludedPoints)
         {
+            Busy = true;
             WorldMapPerspective.DiggingMode = false;
-            if(clearExcludedPoints) pointsToExclude.Clear();
+            amDesperate = false;
+            if (clearExcludedPoints)
+            {
+                pointsToExclude.Clear();
+                pathfindFailures = 0;
+            }
 
             List<Point> collectibles = pathType == PathType.Collecting ? WorldMapPerspective.Collectibles.Except(pointsToExclude).Where(col => col.X > startPosition.X - 15 && col.X < startPosition.X + 16 && col.Y > startPosition.Y - 10 && col.Y < startPosition.Y + 11).ToList() : new();
 
@@ -41,7 +50,7 @@ namespace ReferenceBot.Services
                                 collectibles.Add(new Point(i, j));
                             }
 
-                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Platform && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j + 1)))
+                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Platform && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j + 1), true))
                             {
                                 collectibles.Add(new Point(i, j + 1));
                             }
@@ -59,25 +68,93 @@ namespace ReferenceBot.Services
                         dug[i] = new bool[WorldMapPerspective.ObjectCoordinates[i].Length];
                     }
 
-                    collectibles = WorldMapPerspective.NextSolidContainingPoints(startPosition, dug);
+                    if (startPosition.Y > WorldMapPerspective.PlatformsLeastY) collectibles = WorldMapPerspective.NextSolidContainingPoints(startPosition, dug);
                     collectibles = collectibles.Except(pointsToExclude).ToList();
 
                     if (collectibles.Count == 0)
                     {
                         collectibles = new();
-                        var random = new Random();
-                        for (int i = 0; i < 4; i++)
+
+                        if (WorldMapPerspective.BotOnSolid(startPosition) && startPosition.Y > 0)
                         {
-                            GaussianRandom gaussianRandom = new GaussianRandom();
-                            int yCoord = (int)gaussianRandom.NextGaussian(70, 20);
-                            var xCoord = random.Next(0, WorldMapPerspective.MapXLength);
-                            while (yCoord >= WorldMapPerspective.MapYLength || yCoord < 0 || WorldMapPerspective.ObjectCoordinates[xCoord][yCoord] != ObjectType.Solid)
+                            if (WorldMapPerspective.ObjectCoordinates[startPosition.X][startPosition.Y - 1] == ObjectType.Solid)
                             {
-                                xCoord = random.Next(0, WorldMapPerspective.MapXLength);
-                                yCoord = (int)gaussianRandom.NextGaussian(70, 20);
+                                var lump = WorldMapPerspective.GetLumpFromPoint(new(startPosition.X, startPosition.Y - 1));
+                                if (lump.Size > 10 && lump.TopLeft.Y > WorldMapPerspective.PlatformsLeastY)
+                                {
+                                    if (WorldMapPerspective.BotIsOnStableFooting(lump.TopLeft) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopLeft.X, lump.TopLeft.X + 1))) collectibles.Add(lump.TopLeft);
+                                    if (WorldMapPerspective.BotIsOnStableFooting(lump.TopRight) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopRight.X, lump.TopRight.X - 1))) collectibles.Add(lump.TopRight);
+                                }
+                            }
+                            else if (WorldMapPerspective.ObjectCoordinates[startPosition.X + 1][startPosition.Y - 1] == ObjectType.Solid)
+                            {
+                                var lump = WorldMapPerspective.GetLumpFromPoint(new(startPosition.X + 1, startPosition.Y - 1));
+                                if (lump.Size > 10 && lump.TopLeft.Y > WorldMapPerspective.PlatformsLeastY)
+                                {
+                                    if (WorldMapPerspective.BotIsOnStableFooting(lump.TopLeft) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopLeft.X, lump.TopLeft.X + 1))) collectibles.Add(lump.TopLeft);
+                                    if (WorldMapPerspective.BotIsOnStableFooting(lump.TopRight) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopRight.X, lump.TopRight.X - 1))) collectibles.Add(lump.TopRight);
+                                }
                             }
 
-                            collectibles.Add(new Point(xCoord, yCoord));
+                        }
+
+                        var random = new Random();
+                        if (collectibles.Count < 4)
+                        {
+                            for (int i = 0; i < 10; i++)
+                            {
+                                GaussianRandom gaussianRandom = new GaussianRandom();
+                                int delta = 2;
+                                int counter = 1;
+                                if(Math.Abs(startPosition.Y - WorldMapPerspective.PlatformsGreatestY) < 10) delta = 10;
+                                int yCoord = (int)gaussianRandom.NextGaussian(startPosition.Y, delta);
+                                var xCoord = (int)gaussianRandom.NextGaussian(startPosition.X, 5);
+
+                                while (yCoord >= WorldMapPerspective.MapYLength || yCoord < WorldMapPerspective.PlatformsLeastY || xCoord >= WorldMapPerspective.MapXLength || xCoord < 0 || WorldMapPerspective.ObjectCoordinates[xCoord][yCoord] != ObjectType.Solid)
+                                {
+                                    if(counter < 5) counter++;
+                                    yCoord = (int)gaussianRandom.NextGaussian(startPosition.Y, delta * counter);
+                                    xCoord = (int)gaussianRandom.NextGaussian(startPosition.X, 5 * counter);
+                                }
+
+                                var lump = WorldMapPerspective.GetLumpFromPoint(new(xCoord, yCoord));
+                                var yVariable = lump.TopLeft.Y;
+                                if (lump.Size > 10 && yVariable > WorldMapPerspective.PlatformsLeastY)
+                                {
+                                    if (startPosition.Y < WorldMapPerspective.PlatformsLeastY + 5)
+                                    {
+                                        var xVariable = lump.TopLeft.X;
+                                        var topRightX = lump.TopRight.X;
+                                        while (xVariable <= topRightX)
+                                        {
+                                            var considered = new Point(xVariable, yVariable);
+                                            if (WorldMapPerspective.BotIsOnStableFooting(considered)) collectibles.Add(considered);
+                                            xVariable++;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (WorldMapPerspective.BotIsOnStableFooting(lump.TopLeft) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopLeft.X, lump.TopLeft.X + 1))) collectibles.Add(lump.TopLeft);
+                                        if (WorldMapPerspective.BotIsOnStableFooting(lump.TopRight) || WorldMapPerspective.BotIsOnStableFooting(new(lump.TopRight.X, lump.TopRight.X - 1))) collectibles.Add(lump.TopRight);
+                                    }
+                                }
+
+                                if (lump.Size > 10 && yVariable > WorldMapPerspective.PlatformsGreatestY)
+                                {
+                                    collectibles.Add(lump.PointOnMyLevel(startPosition.Y));
+                                }
+
+                                if (collectibles.Count > 4) break;
+                            }
+                        }
+
+                        if (collectibles.Count == 0)
+                        {
+                            amDesperate = true;
+                            foreach (var point in WorldMapPerspective.PointsOnStableFootingAtGivenManhattanDistance(startPosition, 5).OrderByDescending(s => s.Y).Take(3))
+                            {
+                                collectibles.Add(point);
+                            }
                         }
                     }
                     else
@@ -95,15 +172,16 @@ namespace ReferenceBot.Services
                 sortedCollectibles.Add(collectible);
             }
             //var count = sortedCollectibles.Count;
-            //count = count > 100 ? 30 : 3;
+            var count = amDesperate ? 10 : 3;
             closestCollectibles = sortedCollectibles.Take(3).ToList();
 
             //Stopwatch sw = Stopwatch.StartNew();
             // Calculate which collectible has the shortest path
-            Point closestCollectibleByPath = closestCollectibles.First();
+            Point closestCollectibleByPath = closestCollectibles.Any() ? closestCollectibles.First() : RandomPoint(startPosition);
             Path? closestPath = pathType == PathType.Collecting ? PerformBFS(startPosition, closestCollectibleByPath, botMovementStateAtStart, pathType, jumpHeightAtStart, deltaToStartPosition)
                 : (WorldMapPerspective.DiggingMode ? PerformDiggingDFS(startPosition, botMovementStateAtStart, pathType, collectibles) : PerformAStarSearch(startPosition, closestCollectibleByPath, botMovementStateAtStart, pathType, jumpHeightAtStart, deltaToStartPosition));
-            if (!WorldMapPerspective.DiggingMode) {
+            if (!WorldMapPerspective.DiggingMode)
+            {
                 foreach (var collectible in closestCollectibles.Skip(1))
                 {
                     int closestPathDistance = closestPath is Path path ? path.Length : Int32.MaxValue;
@@ -132,28 +210,44 @@ namespace ReferenceBot.Services
                 Console.WriteLine($"Closest path found of length {closestPath.Length}");
                 OnBestPathFound(closestPath);
                 pointsToExclude.Add(closestPath.Target);
+                Busy = false;
                 return closestPath;
             }
             else
             {
                 Console.WriteLine("Failed to find a suitable path");
                 pointsToExclude.AddRange(closestCollectibles);
-
+                pathfindFailures++;
+                if (pathfindFailures > 10)
+                {
+                    Busy = false;
+                    return null;
+                }
 
                 return FindBestPath(startPosition, deltaToStartPosition, botMovementStateAtStart, jumpHeightAtStart, pathType, false);
             }
         }
 
+        private Point RandomPoint(Point startPosition)
+        {
+            GaussianRandom gaussianRandom = new GaussianRandom();
+            int yCoord = (int)gaussianRandom.NextGaussian(startPosition.Y + 5, 5);
+            var xCoord = (int)gaussianRandom.NextGaussian(startPosition.X, 5);
+
+            return new(xCoord, yCoord);
+        }
+
         private Path PerformDiggingDFS(Point startPosition, MovementState botMovementStateAtStart, PathType pathType, List<Point> closestSolidContaingPoints)
         {
-            var nextPoints = closestSolidContaingPoints.Where(p => WorldMapPerspective.BotIsOnStableFooting(p)).OrderByDescending(s => s.Y).ToList();
+            var nextPoints = closestSolidContaingPoints.Where(p => WorldMapPerspective.BotIsOnStableFooting(p) && !WorldMapPerspective.BotOnHazard(p)).OrderByDescending(s => s.Y).ToList();
             var currentNode = new Node(startPosition.X, startPosition.Y, null, botMovementStateAtStart, 0, InputCommand.None, true, 0);
             foreach (var point in WorldMapPerspective.BoundingBox(startPosition))
             {
                 dug[point.X][point.Y] = true;
             }
 
-            while (nextPoints.Count > 0) {
+            while (nextPoints.Count > 0)
+            {
                 var nextPoint = nextPoints.First();
                 foreach (var point in WorldMapPerspective.BoundingBox(nextPoint))
                 {
@@ -162,15 +256,22 @@ namespace ReferenceBot.Services
 
                 InputCommand inputCommand = nextPoint.Y < currentNode.Y ? InputCommand.DIGDOWN : (nextPoint.X < currentNode.X ? InputCommand.DIGLEFT : InputCommand.DIGRIGHT);
                 currentNode = new Node(nextPoint.X, nextPoint.Y, currentNode, botMovementStateAtStart, 0, inputCommand, true, 0);
-                nextPoints = WorldMapPerspective.NextSolidContainingPoints(nextPoint, dug).Where(p => WorldMapPerspective.BotIsOnStableFooting(p)).OrderByDescending(s => s.Y).ToList();
+                nextPoints = WorldMapPerspective.NextSolidContainingPoints(nextPoint, dug).Where(p => WorldMapPerspective.BotIsOnStableFooting(p) && !WorldMapPerspective.BotOnHazard(p)).OrderByDescending(s => s.Y).ToList();
             }
 
             if (currentNode.Parent == null)
             {
-                nextPoints = closestSolidContaingPoints.OrderByDescending(s => s.Y).ToList();
-                var nextPoint = nextPoints.First();
-                InputCommand inputCommand = nextPoint.Y < currentNode.Y ? InputCommand.DIGDOWN : (nextPoint.X < currentNode.X ? InputCommand.DIGLEFT : InputCommand.DIGRIGHT);
-                currentNode = new Node(nextPoint.X, nextPoint.Y, currentNode, botMovementStateAtStart, 0, inputCommand, true, 0);
+                if (currentNode.Y < WorldMapPerspective.PlatformsLeastY + 15)
+                {
+                    return null;
+                }
+                else
+                {
+                    nextPoints = closestSolidContaingPoints.OrderByDescending(s => s.Y).ToList();
+                    var nextPoint = nextPoints.First();
+                    InputCommand inputCommand = nextPoint.Y < currentNode.Y ? InputCommand.DIGDOWN : (nextPoint.X < currentNode.X ? InputCommand.DIGLEFT : InputCommand.DIGRIGHT);
+                    currentNode = new Node(nextPoint.X, nextPoint.Y, currentNode, botMovementStateAtStart, 0, inputCommand, true, 0);
+                }
             }
 
             return ConstructPath(currentNode, currentNode, pathType);
@@ -184,7 +285,7 @@ namespace ReferenceBot.Services
         // A* algorithm
         protected static Path? PerformAStarSearch(Point start, Point end, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition)
         {
-            var exploring = pathType != PathType.Collecting;
+            var exploring = pathType == PathType.Exploring;
 
             var startNode = new Node(start.X, start.Y, null, botMovementState, 0, InputCommand.None, true, jumpHeight);
             startNode.DeltaToMe = deltaToStartPosition;
@@ -236,7 +337,7 @@ namespace ReferenceBot.Services
         }
 
         // Breadth First Search algorithm
-        protected static Path? PerformBFS(Point start, Point end, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition)
+        protected static Path? PerformBFS(Point start, Point end, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition, bool attemptToLandSafely = false)
         {
             var exploring = pathType != PathType.Collecting;
 
@@ -254,7 +355,8 @@ namespace ReferenceBot.Services
             while (openSet.Count > 0)
             {
                 var currentNode = openSet.Dequeue();
-                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && (currentNode.HCost < 10)))
+                //if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end)) attemptToLandSafely = true;
+                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && startNode.HCost > 10 && (currentNode.HCost < 5)) || (attemptToLandSafely && WorldMapPerspective.BotIsOnStableFooting(currentNode) && !WorldMapPerspective.BotOnHazard(currentNode)))
                 {
                     return ConstructPath(currentNode, end, pathType);
                 }
@@ -269,7 +371,7 @@ namespace ReferenceBot.Services
                     }
                     neighbour.HCost = WorldMapPerspective.ManhattanDistance(neighbour, end);
 
-                    if (neighbour.FCost > startNode.FCost + 16)
+                    if (neighbour.FCost > startNode.FCost + 19)
                     {
                         continue;
                     }
@@ -277,6 +379,8 @@ namespace ReferenceBot.Services
                     openSet.Enqueue(neighbour);
                 }
             }
+
+            //if(attemptToLandSafely) return
 
             return null;
         }
@@ -424,7 +528,7 @@ namespace ReferenceBot.Services
             }
 
             MovementState expectedBotMovementState = jumping && CanContinueJumping(neighbourPosition, currentNode, exploring) ? MovementState.Jumping :
-                WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) ? MovementState.Idle : MovementState.Falling;
+                (WorldMapPerspective.BotIsOnStableFooting(neighbourPosition) || (jumping && currentNode.JumpHeight < 2)) ? MovementState.Idle : MovementState.Falling;
 
             Node nextNode = new Node(neighbourPosition.X, neighbourPosition.Y, currentNode, expectedBotMovementState,
                 currentNode.ExpectedGameTickOffset + 1, inputCommand, isAcceptableCommand, jumping ? currentNode.JumpHeight + 1 : 0);
@@ -452,22 +556,6 @@ namespace ReferenceBot.Services
             }
 
             return false;
-        }
-
-        public void EvaluateSubsequentBestPathFromCurrentTarget(Path currentPath)
-        {
-            var lastNodeOnCurrentPath = currentPath.Nodes.Last();
-            var nextPath = FindBestPath(lastNodeOnCurrentPath, lastNodeOnCurrentPath.DeltaToMe, lastNodeOnCurrentPath.ExpectedEndBotMovementState, lastNodeOnCurrentPath.JumpHeight, PathType.Collecting, false);
-            if (nextPath is Path)
-            {
-                Console.WriteLine($"Found subsequent path from current target.");
-                OnSubsequentBestPathFound(nextPath);
-            }
-        }
-
-        private void OnSubsequentBestPathFound(Path nextPath)
-        {
-            SubsequentBestPathFound?.Invoke(this, nextPath);
         }
     }
 

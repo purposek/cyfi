@@ -9,8 +9,7 @@ namespace ReferenceBot.Services.Interfaces
     public interface IPathTraversalService
     {
         Path CurrentPath { get; }
-
-        event EventHandler<(Path, BotStateDTO, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)>)> FindNextBestPath;
+        Guid BotId { get; }
         BotCommand NextCommand(BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
         void SetBotId(Guid id);
     }
