@@ -10,6 +10,9 @@ namespace ReferenceBot.Services.Interfaces
     {
         Path CurrentPath { get; }
         Guid BotId { get; }
+
+        bool NavigateAwayFromOpponentPositions(BotCommand command, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
+        BotCommand NavigateTowardsOpponentPositions(BotCommand command, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict, InputCommand generalDirection, int generalDistance);
         BotCommand NextCommand(BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
         void SetBotId(Guid id);
     }

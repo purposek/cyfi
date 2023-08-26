@@ -2,7 +2,7 @@
 {
     public static class PositionHistory
     {
-        private const int _capacity = 30;
+        private const int _capacity = 20;
         private static Queue<Point> _latestPositions = new Queue<Point>(_capacity);
 
         public static void AddPosition(Point position)

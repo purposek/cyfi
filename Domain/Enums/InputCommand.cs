@@ -15,8 +15,6 @@ namespace Domain.Enums
         DIGLEFT = 10,
         DIGRIGHT = 11,
         STEAL= 12,
-        RADAR = 13,
-        EVADE = 14,
-        PURSUE = 15,
+        RADAR = 13
     }
 }

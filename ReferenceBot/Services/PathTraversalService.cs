@@ -5,12 +5,12 @@ using ReferenceBot.Services.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Input;
 
 namespace ReferenceBot.Services
 {
     public class PathTraversalService : IPathTraversalService
     {
-        public event EventHandler<(Path, BotStateDTO, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)>)> FindNextBestPath;
         private readonly IPathfindingService pathfindingService;
         private readonly Dictionary<Point, InputCommand> bestInputCommandFromPoint = new();
         private Guid botId;
@@ -30,7 +30,8 @@ namespace ReferenceBot.Services
             var gameTickToCheck = botState.GameTick;
             var stagnant = 0;
 
-            if(botState.GameTick > 30 && botState.GameTick % 30 == 0 && PatternFound(PositionHistory.GetLatestPositions())) {
+            if (botState.GameTick > 30 && botState.GameTick % 30 == 0 && PatternFound(PositionHistory.GetLatestPositions()))
+            {
                 stagnant = 4;
             }
 
@@ -41,7 +42,7 @@ namespace ReferenceBot.Services
             }
 
             InputCommand icommand;
-            if (stagnant < 3 && bestInputCommandFromPoint.TryGetValue(botState.CurrentPosition, out InputCommand inputCommand) && ((currentPath.PathType != PathType.Collecting ) || WorldMapPerspective.Collectibles.Contains(currentPath.Target)))
+            if (stagnant < 3 && bestInputCommandFromPoint.TryGetValue(botState.CurrentPosition, out InputCommand inputCommand) && ((currentPath.PathType != PathType.Collecting) || WorldMapPerspective.Collectibles.Contains(currentPath.Target)))
             {
                 return new BotCommand
                 {
@@ -94,6 +95,9 @@ namespace ReferenceBot.Services
                     return command;
                 }
             }
+            //Console.ForegroundColor = ConsoleColor.Red;
+            //Console.WriteLine("***********GOT HERE**************");
+            //Console.ResetColor();
             return new BotCommand
             {
                 BotId = botId,
@@ -119,6 +123,10 @@ namespace ReferenceBot.Services
                     }
                     if (patternFound)
                     {
+                        //Console.ForegroundColor = ConsoleColor.Red;
+                        //Console.WriteLine($"^^^^^^^^Repetitive pattern of length {patternLength} found starting at index {i}^^^^^^^^");
+                        //Console.ResetColor();
+
                         return true; // Return as soon as the first pattern is found
                     }
                 }
@@ -143,6 +151,95 @@ namespace ReferenceBot.Services
                     bestInputCommandFromPoint[node] = nextNode.CommandToReachMe;
                 }
             }
+        }
+
+        public bool NavigateAwayFromOpponentPositions(BotCommand command, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict)
+        {
+            var radarPositions = new List<Point>(); // WorldMapPerspective.OpponentPositions.Where(x => botState.RadarData.Select(y => (InputCommand)y[0]).Contains(WorldMapPerspective.GetDirection(botState.CurrentPosition, x)));
+
+            foreach (var radarDataItem in botState.RadarData)
+            {
+                foreach (var posn in WorldMapPerspective.OpponentPositions)
+                {
+                    if(WorldMapPerspective.GetDirection(botState.CurrentPosition, posn) == (InputCommand)radarDataItem[0] && WorldMapPerspective.GetDistanceFactor(botState.CurrentPosition, posn) == radarDataItem[1]) radarPositions.Add(posn);
+                }
+            }
+
+            var opponentPositions = WorldMapPerspective.OpponentPositions.Except(radarPositions);
+            if (opponentPositions.Any())
+            {
+                var firstPos = opponentPositions.First();
+                var foundPath = pathfindingService.GetNextSafeNavigationPathAway(command, botState.CurrentPosition, firstPos, botState, gameStateDict);
+                if (foundPath != null)
+                {
+                    var nextNode = foundPath.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(botState.CurrentPosition));
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public BotCommand NavigateTowardsOpponentPositions(BotCommand command, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict, InputCommand generalDirection, int generalDistance)
+        {
+            Point target;
+            var opponentPositions = WorldMapPerspective.OpponentPositions.Where(x => WorldMapPerspective.GetDirection(botState.CurrentPosition, x) == generalDirection && WorldMapPerspective.GetDistanceFactor(botState.CurrentPosition, x) == generalDistance);
+            if (opponentPositions.Any())
+            {
+                target = opponentPositions.First(x => WorldMapPerspective.GetDirection(botState.CurrentPosition, x) == generalDirection);
+            }
+            else
+            {
+                switch (generalDirection)
+                {
+                    case InputCommand.UP:
+                        target = new(botState.CurrentPosition.X, Math.Min(botState.Y + 10, WorldMapPerspective.PlatformsGreatestY));
+                        break;
+                    case InputCommand.DOWN:
+                        target = new(botState.CurrentPosition.X, Math.Max(botState.Y - 10, WorldMapPerspective.PlatformsLeastY));
+                        break;
+                    case InputCommand.LEFT:
+                        target = new(Math.Max(botState.CurrentPosition.X - 10, 0), botState.Y);
+                        break;
+                    case InputCommand.RIGHT:
+                        target = new(Math.Min(botState.CurrentPosition.X + 10, WorldMapPerspective.MapXLength - 1), botState.Y);
+                        break;
+                    case InputCommand.UPLEFT:
+                        target = new(Math.Max(botState.CurrentPosition.X - 10, 0), Math.Min(botState.Y + 10, WorldMapPerspective.PlatformsGreatestY));
+                        break;
+                    case InputCommand.UPRIGHT:
+                        target = new(Math.Min(botState.CurrentPosition.X + 10, WorldMapPerspective.MapXLength - 1), Math.Min(botState.Y + 10, WorldMapPerspective.PlatformsGreatestY));
+                        break;
+                    case InputCommand.DOWNLEFT:
+                        target = new(Math.Max(botState.CurrentPosition.X - 10, 0), Math.Max(botState.Y - 10, WorldMapPerspective.PlatformsLeastY));
+                        break;
+                    case InputCommand.DOWNRIGHT:
+                        target = new(Math.Min(botState.CurrentPosition.X + 10, WorldMapPerspective.MapXLength - 1), Math.Max(botState.Y - 10, WorldMapPerspective.PlatformsLeastY));
+                        break;
+                    default:
+                        GaussianRandom gaussianRandom = new GaussianRandom();
+                        int yCoord = (int)gaussianRandom.NextGaussian(WorldMapPerspective.MapYLength * 0.7, 20);
+                        var xCoord = (int)gaussianRandom.NextGaussian(WorldMapPerspective.MapXLength * 0.5, 20);
+                        target = new(xCoord, yCoord);
+                        break;
+                }
+            }
+
+            var foundPath = pathfindingService.GetNextSafeNavigationPathTowards(command, botState.CurrentPosition, target, botState, gameStateDict);
+            if (foundPath != null)
+            {
+                var nextNode = foundPath.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(botState.CurrentPosition));
+                if (nextNode != null)
+                {
+                    command = new BotCommand
+                    {
+                        BotId = botId,
+                        Action = nextNode.CommandToReachMe
+                    };
+                };
+                return command;
+            }
+
+            return command;
         }
     }
 }

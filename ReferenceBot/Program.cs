@@ -96,9 +96,9 @@ namespace ReferenceBot
                     Stopwatch sw = Stopwatch.StartNew();
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
                     PositionHistory.AddPosition(botState.CurrentPosition);
-                    BotCommand command = pathTraversalService.NextCommand(botState, GameStateDict);
-                    command = adversarialDecisionService.NextCommand(command, botState, GameStateDict);
-                    //if (command.Action == InputCommand.EVADE) command = pathTraversalService.NextEvasiveCommand(botState, GameStateDict);
+                    BotCommand command;
+                    command = pathTraversalService.NextCommand(botState, GameStateDict);
+                    if (WorldMapPerspective.OpponentsInCloseRange) command = adversarialDecisionService.NextCommand(command, botState, GameStateDict);
                     connection.InvokeAsync("SendPlayerCommand", command);
                     CommandHistory.AddCommand(command.Action);
                     sw.Stop();

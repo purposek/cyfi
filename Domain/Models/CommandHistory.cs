@@ -4,8 +4,8 @@ namespace Domain.Models
 {
     public static class CommandHistory
     {
-        private const int _capacity = 10;
-        private static Queue<InputCommand> _latestCommands = new Queue<InputCommand>(_capacity);
+        private const int _capacity = 8;
+        private static readonly Queue<InputCommand> _latestCommands = new(_capacity);
 
         public static void AddCommand(InputCommand command)
         {
@@ -25,6 +25,11 @@ namespace Domain.Models
         public static List<InputCommand> GetLatestCommands()
         {
             return _latestCommands.ToList();
+        }
+
+        public static InputCommand GetLastCommand()
+        {
+            return _latestCommands.LastOrDefault();
         }
     }
 }
