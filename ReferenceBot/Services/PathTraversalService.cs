@@ -94,9 +94,6 @@ namespace ReferenceBot.Services
                     return command;
                 }
             }
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("***********GOT HERE**************");
-            Console.ResetColor();
             return new BotCommand
             {
                 BotId = botId,
@@ -122,10 +119,6 @@ namespace ReferenceBot.Services
                     }
                     if (patternFound)
                     {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"^^^^^^^^Repetitive pattern of length {patternLength} found starting at index {i}^^^^^^^^");
-                        Console.ResetColor();
-
                         return true; // Return as soon as the first pattern is found
                     }
                 }

@@ -34,7 +34,6 @@ namespace ReferenceBot.Services
 
             List<Point> collectibles = pathType == PathType.Collecting ? WorldMapPerspective.Collectibles.Except(pointsToExclude).Where(col => col.X > startPosition.X - 15 && col.X < startPosition.X + 16 && col.Y > startPosition.Y - 10 && col.Y < startPosition.Y + 11).ToList() : new();
 
-            Console.WriteLine($"Search found {collectibles.Count()} collectibles");
             if (collectibles.Count == 0 && pathType != PathType.Digging)
             {
                 collectibles = new();
@@ -185,17 +184,8 @@ namespace ReferenceBot.Services
                 foreach (var collectible in closestCollectibles.Skip(1))
                 {
                     int closestPathDistance = closestPath is Path path ? path.Length : Int32.MaxValue;
-                    Console.WriteLine("Finding path");
                     var newPath = pathType == PathType.Collecting ? PerformBFS(startPosition, closestCollectibleByPath, botMovementStateAtStart, pathType, jumpHeightAtStart, deltaToStartPosition)
                     : PerformAStarSearch(startPosition, closestCollectibleByPath, botMovementStateAtStart, pathType, jumpHeightAtStart, deltaToStartPosition);
-                    if (newPath != null)
-                    {
-                        Console.WriteLine($"Found path of length {newPath.Length}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to find path");
-                    }
 
                     if (newPath is Path newP && newP.Length < closestPathDistance)
                     {
@@ -207,7 +197,6 @@ namespace ReferenceBot.Services
 
             if (closestPath is Path)
             {
-                Console.WriteLine($"Closest path found of length {closestPath.Length}");
                 OnBestPathFound(closestPath);
                 pointsToExclude.Add(closestPath.Target);
                 Busy = false;
@@ -215,7 +204,6 @@ namespace ReferenceBot.Services
             }
             else
             {
-                Console.WriteLine("Failed to find a suitable path");
                 pointsToExclude.AddRange(closestCollectibles);
                 pathfindFailures++;
                 if (pathfindFailures > 10)
@@ -299,8 +287,7 @@ namespace ReferenceBot.Services
 
             while (openSet.Count > 0)
             {
-                var currentNode = openSet.DeleteMin();//openSet.First();
-                //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
+                var currentNode = openSet.DeleteMin();
                 if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && startNode.HCost > 10 && (currentNode.HCost < 5)))
                 {
                     //endNode.Parent = currentNode.Parent;
