@@ -11,7 +11,7 @@ namespace ReferenceBot.Services.Interfaces
         bool Busy { get; }
 
         event EventHandler<Path> BestPathFound;
-        Path FindBestPath(Point startPosition, Point deltaToStartPosition, MovementState botMovementStateAtStart, int jumpHeightAtStart, PathType pathType, bool clearExcludedPoints);
+        Path FindBestPath(Point startPosition, Point deltaToStartPosition, MovementState botMovementStateAtStart, int jumpHeightAtStart, PathType pathType, bool clearExcludedPoints, bool skipEploration);
         Path GetNextSafeNavigationPathAway(BotCommand command, Point currentPosition, Point firstPos, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
         Path GetNextSafeNavigationPathTowards(BotCommand command, Point currentPosition, Point firstPos, BotStateDTO botState, Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> gameStateDict);
     }

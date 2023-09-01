@@ -21,7 +21,7 @@ namespace ReferenceBot.Services
 
         public bool Busy { get; set; }
 
-        public Path FindBestPath(Point startPosition, Point deltaToStartPosition, MovementState botMovementStateAtStart, int jumpHeightAtStart, PathType pathType, bool clearExcludedPoints)
+        public Path FindBestPath(Point startPosition, Point deltaToStartPosition, MovementState botMovementStateAtStart, int jumpHeightAtStart, PathType pathType, bool clearExcludedPoints, bool skipEploration)
         {
             Busy = true;
             WorldMapPerspective.DiggingMode = false;
@@ -38,21 +38,24 @@ namespace ReferenceBot.Services
             if (collectibles.Count == 0 && pathType != PathType.Digging)
             {
                 collectibles = new();
-                pathType = PathType.Exploring;
-                for (int i = 0; i < WorldMapPerspective.MapXLength; i++)
+                if (!skipEploration)
                 {
-                    for (int j = 0; j < WorldMapPerspective.MapYLength; j++)
+                    pathType = PathType.Exploring;
+                    for (int i = 0; i < WorldMapPerspective.MapXLength; i++)
                     {
-                        if (WorldMapPerspective.KnownCoordinates[i][j])
+                        for (int j = 0; j < WorldMapPerspective.MapYLength; j++)
                         {
-                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Ladder && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j), true))
+                            if (WorldMapPerspective.KnownCoordinates[i][j])
                             {
-                                collectibles.Add(new Point(i, j));
-                            }
+                                if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Ladder && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j), true))
+                                {
+                                    collectibles.Add(new Point(i, j));
+                                }
 
-                            if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Platform && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j + 1), true))
-                            {
-                                collectibles.Add(new Point(i, j + 1));
+                                if (WorldMapPerspective.ObjectCoordinates[i][j] == ObjectType.Platform && WorldMapPerspective.BoundingBoxHasUnknown(new Point(i, j + 1), true))
+                                {
+                                    collectibles.Add(new Point(i, j + 1));
+                                }
                             }
                         }
                     }
@@ -166,7 +169,7 @@ namespace ReferenceBot.Services
 
             List<Point> closestCollectibles;
 
-            SortedSet<Point> sortedCollectibles = pathType == PathType.Exploring && WorldMapPerspective.TicksInLevel < 130 ? new SortedSet<Point>(new CollectibleYSorter()) : new SortedSet<Point>(new CollectibleSorter(startPosition));
+            SortedSet<Point> sortedCollectibles = pathType == PathType.Exploring && WorldMapPerspective.TicksInLevel < 260 ? new SortedSet<Point>(new CollectibleYSorter()) : new SortedSet<Point>(new CollectibleSorter(startPosition));
             foreach (var collectible in collectibles)
             {
                 sortedCollectibles.Add(collectible);
@@ -197,7 +200,7 @@ namespace ReferenceBot.Services
                     //    Console.WriteLine($"Failed to find path");
                     //}
 
-                    if (newPath is Path newP && (pathType == PathType.Exploring ? newP.Target.Y < closestPathDistance : newP.Length < closestPathDistance))
+                    if (newPath is Path newP && (pathType == PathType.Exploring ? newP.Target.Y > closestPathDistance : newP.Length < closestPathDistance))
                     {
                         closestCollectibleByPath = collectible;
                         closestPath = newPath;
@@ -224,7 +227,7 @@ namespace ReferenceBot.Services
                     return null;
                 }
 
-                return FindBestPath(startPosition, deltaToStartPosition, botMovementStateAtStart, jumpHeightAtStart, pathType, false);
+                return FindBestPath(startPosition, deltaToStartPosition, botMovementStateAtStart, jumpHeightAtStart, pathType, false, skipEploration);
             }
         }
 
@@ -269,6 +272,20 @@ namespace ReferenceBot.Services
                 {
                     nextPoints = closestSolidContaingPoints.OrderByDescending(s => s.Y).ToList();
                     var nextPoint = nextPoints.First();
+                    var solidPoint = WorldMapPerspective.BoundingBox(nextPoint).First(x => WorldMapPerspective.ObjectCoordinates[x.X][x.Y] == ObjectType.Solid);
+                    var lump = WorldMapPerspective.GetLumpFromPoint(solidPoint);
+                    var yVariable = lump.TopLeft.Y;
+                    if (lump.Size > 5)
+                    {
+                        var xVariable = lump.TopLeft.X;
+                        var topRightX = lump.TopRight.X;
+                        while (xVariable <= topRightX)
+                        {
+                            var considered = new Point(xVariable, yVariable);
+                            if (WorldMapPerspective.BotIsOnStableFooting(considered)) return PerformAStarSearch(currentNode, considered, MovementState.Idle, PathType.Collecting, 0, new(0, 0), true);
+                            xVariable++;
+                        }
+                    }
                     InputCommand inputCommand = nextPoint.Y < currentNode.Y ? InputCommand.DIGDOWN : (nextPoint.X < currentNode.X ? InputCommand.DIGLEFT : InputCommand.DIGRIGHT);
                     currentNode = new Node(nextPoint.X, nextPoint.Y, currentNode, botMovementStateAtStart, 0, inputCommand, true, 0);
                 }
@@ -283,7 +300,7 @@ namespace ReferenceBot.Services
         }
 
         // A* algorithm
-        protected static Path PerformAStarSearch(Point start, Point end, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition)
+        protected static Path PerformAStarSearch(Point start, Point end, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition, bool landOnTargetNode = false)
         {
             var exploring = pathType == PathType.Exploring;
 
@@ -301,7 +318,7 @@ namespace ReferenceBot.Services
             {
                 var currentNode = openSet.DeleteMin();//openSet.First();
                 //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
-                if (WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (exploring && startNode.HCost > 10 && (currentNode.HCost < 5)))
+                if ((!landOnTargetNode && WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (landOnTargetNode && end.Equals(currentNode))))// || (exploring && startNode.HCost > 10 && (currentNode.HCost < 5))
                 {
                     //endNode.Parent = currentNode.Parent;
                     return ConstructPath(currentNode, end, pathType);
@@ -693,7 +710,7 @@ namespace ReferenceBot.Services
     {
         public int Compare(Point x, Point y)
         {
-            return x.Y - y.Y;
+            return y.Y - x.Y;
         }
     }
 
