@@ -31,6 +31,7 @@ namespace Domain.Models
         public static int PlatformsGreatestY { get; set; }
 
         public static bool CheckIfAheadWhenLanded;
+        public static bool SkipExploration => TicksInLevel > 260 && TicksInLevel < 1520;
 
         public static int PerformingAdversarialManouvreToTick { get; set; }
 
@@ -57,6 +58,25 @@ namespace Domain.Models
             KnownCoordinates[x][y] = known;
         }
 
+        public static double CalculatePercentageKnown()
+        {
+            int totalCoordinates = MapXLength * MapYLength;
+            int knownCoordinates = 0;
+
+            foreach (var row in KnownCoordinates)
+            {
+                foreach (var value in row)
+                {
+                    if (value)
+                    {
+                        knownCoordinates++;
+                    }
+                }
+            }
+
+            return (double)knownCoordinates / totalCoordinates;
+        }
+
         public static void UpdateState(BotStateDTO botState)
         {
             if (botState.CurrentLevel != Level)
@@ -67,6 +87,7 @@ namespace Domain.Models
                 PlatformsLeastY = MapYLength;
                 PlatformsGreatestY = 0;
                 CheckIfAheadWhenLanded = true;
+                //SkipExploration = false;
                 for (int i = 0; i < MapXLength; i++)
                 {
                     for (int j = 0; j < MapYLength; j++)
@@ -102,7 +123,10 @@ namespace Domain.Models
 
                         if ((ObjectType)botState.HeroWindow[i][j] == ObjectType.Collectible && !Collectibles.Contains(currentPoint))
                         {
-                            Collectibles.Add(currentPoint);
+                            if (TicksInLevel < 260 && ObjectCoordinates[worldX][worldY - 2] != ObjectType.Hazard || TicksInLevel >= 260)
+                            {
+                                Collectibles.Add(currentPoint);
+                            }
                         }
 
                         if (((ObjectType)botState.HeroWindow[i][j] == ObjectType.Ladder || (ObjectType)botState.HeroWindow[i][j] == ObjectType.Platform) && worldY < PlatformsLeastY) PlatformsLeastY = worldY;
@@ -125,6 +149,7 @@ namespace Domain.Models
                     }
                 }
             }
+            //if (!SkipExploration && CalculatePercentageKnown() > 0.25 && botState.Y > 0.7 * MapYLength) SkipExploration = true;
         }
 
 

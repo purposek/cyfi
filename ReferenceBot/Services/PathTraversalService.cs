@@ -73,8 +73,9 @@ namespace ReferenceBot.Services
 
             if (!this.pathfindingService.Busy)
             {
-                var skipEploration = WorldMapPerspective.TicksInLevel > 260;// botState.CurrentLevel != 0 && botState.Collected >= WorldMapPerspective.LevelTargetCollectables[botState.CurrentLevel] * 0.9;
-                var foundPath = this.pathfindingService.FindBestPath(botState.CurrentPosition, gameStateDict[botState.GameTick].DeltaToPosition, botMovementState, jumpHeight, PathType.Collecting, true, skipEploration);
+                var skipEploration = WorldMapPerspective.SkipExploration;//TicksInLevel > 260;// botState.CurrentLevel != 0 && botState.Collected >= WorldMapPerspective.LevelTargetCollectables[botState.CurrentLevel] * 0.9;
+                var pathType = WorldMapPerspective.TicksInLevel < 30 ? PathType.Exploring : PathType.Collecting;
+                var foundPath = this.pathfindingService.FindBestPath(botState.CurrentPosition, gameStateDict[botState.GameTick].DeltaToPosition, botMovementState, jumpHeight, pathType, true, skipEploration);
                 if (foundPath != null)
                 {
                     var nextNode = foundPath.Nodes.FirstOrDefault(x => x.Parent != null && ((Point)x.Parent).Equals(botState.CurrentPosition));

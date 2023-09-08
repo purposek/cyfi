@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace ReferenceBot.Services
 {
@@ -318,7 +319,7 @@ namespace ReferenceBot.Services
             {
                 var currentNode = openSet.DeleteMin();//openSet.First();
                 //Console.WriteLine($"Processing point: (X: {currentNode.X}, Y: {currentNode.Y}, FCost: {currentNode.FCost})");
-                if ((!landOnTargetNode && WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (landOnTargetNode && end.Equals(currentNode))))// || (exploring && startNode.HCost > 10 && (currentNode.HCost < 5))
+                if ((!landOnTargetNode && WorldMapPerspective.BotBoundsContainPoint(currentNode, end) || (landOnTargetNode && end.Equals(currentNode))) || (pathType != PathType.Collecting && (currentNode.GCost > 50))) //  
                 {
                     //endNode.Parent = currentNode.Parent;
                     return ConstructPath(currentNode, end, pathType);
@@ -448,6 +449,54 @@ namespace ReferenceBot.Services
                 return ConstructPath(farthestPoint, farthestPoint, pathType);
             }
         }
+
+        protected static Path PerformAdvancedEvadingAStar(Point currentPosition, Point opponentPosition, MovementState botMovementState, PathType pathType, int jumpHeight, Point deltaToStartPosition)
+        {
+            var startNode = new Node(currentPosition.X, currentPosition.Y, null, botMovementState, 0, InputCommand.None, true, jumpHeight);
+            startNode.DeltaToMe = deltaToStartPosition;
+
+            var openSet = new SortedSet<Node>(new NodeComparer());  // NodeComparer compares nodes based on FCost
+            var closedSet = new C5.HashSet<Point>();
+
+            openSet.Add(startNode);
+
+            while (openSet.Count > 0)
+            {
+                var currentNode = openSet.Min;  // Get the node with the lowest FCost
+                openSet.Remove(currentNode);
+                //double currentDistance = WorldMapPerspective.EuclideanDistance(currentNode, opponentPosition);
+                if (currentNode.GCost > 5)/* some termination condition */
+                {
+                    return ConstructPath(currentNode, currentNode, pathType);
+                }
+
+                closedSet.Add(currentNode);
+
+                foreach (var neighbour in Neighbours(currentNode, false))
+                {
+                    if (closedSet.Contains((Point)neighbour))
+                        continue;
+
+                    double tentativeGCost = currentNode.GCost + WorldMapPerspective.EuclideanDistance(currentNode, neighbour);
+                    double hCost = -WorldMapPerspective.EuclideanDistance(neighbour, opponentPosition);  // Negative because we want to maximize this distance
+
+                    if (tentativeGCost + hCost < neighbour.FCost || !openSet.Contains(neighbour))
+                    {
+                        neighbour.GCost = (int)tentativeGCost;
+                        neighbour.HCost = (int)hCost;
+                        neighbour.Parent = currentNode;
+
+                        if (!openSet.Contains(neighbour))
+                        {
+                            openSet.Add(neighbour);
+                        }
+                    }
+                }
+            }
+
+            return null;  // if no path is found
+        }
+
         private static C5.HashSet<Node> Neighbours(Node node, bool exploring)
         {
             var neighbours = new C5.HashSet<Node>();
@@ -489,6 +538,22 @@ namespace ReferenceBot.Services
                 path.Add(node);
             }
             path.Nodes.Reverse();
+            return path;
+        }
+
+        private static Path ConstructPathFromMCTS(List<MCTSNode> bestPath, PathType pathType)
+        {
+            if(bestPath.Count < 2) return null;
+
+            Path path = new();
+            path.PathType = pathType;
+
+            foreach (var mctsNode in bestPath)
+            {
+                path.Add(mctsNode.State);
+                path.Target = mctsNode.State;
+            }
+
             return path;
         }
 
@@ -641,7 +706,15 @@ namespace ReferenceBot.Services
                 gameTickToCheck--;
             }
             var limitation = botState.Collected > WorldMapPerspective.LevelMinCollectablesForPursuit[botState.CurrentLevel] ? 8 : 5;
-            var path = PerformEvadingBFS(currentPosition, firstPos, botMovementState, PathType.Evading, jumpHeight, gameStateDict[botState.GameTick].DeltaToPosition, limitation);
+            //var startNode = new Node(currentPosition.X, currentPosition.Y, null, botMovementState, 0, InputCommand.None, true, jumpHeight);
+            //var mctsNode = new MCTSNode
+            //    {
+           //     State = startNode,
+            //        Parent = null
+            //    };
+            //var bestPath = MonteCarloTreeSearch(mctsNode, firstPos, 10);
+            //var path = ConstructPathFromMCTS(bestPath, PathType.Evading);//PerformAdvancedEvadingAStar(currentPosition, firstPos, botMovementState, PathType.Evading, jumpHeight, gameStateDict[botState.GameTick].DeltaToPosition);//, limitation
+            var path = PerformEvadingBFS(currentPosition, firstPos, botMovementState, PathType.Evading, jumpHeight, gameStateDict[botState.GameTick].DeltaToPosition, limitation);//
 
             if (path != null)
             {
@@ -681,6 +754,116 @@ namespace ReferenceBot.Services
             }
 
             return null;
+        }
+
+
+        public List<MCTSNode> MonteCarloTreeSearch(MCTSNode root, Point opponentPosition, int iterations)
+        {
+            for (int i = 0; i < iterations; ++i)
+            {
+                // Selection
+                MCTSNode node = TreePolicy(root, opponentPosition);
+
+                // Simulation
+                double reward = SimulateFrom(node.State, opponentPosition);
+
+                // Backpropagation
+                Backpropagate(node, reward);
+            }
+
+            // Collect the best nodes down to the leaf
+            List<MCTSNode> bestPath = new List<MCTSNode>();
+            MCTSNode bestChild = root;
+            while (bestChild != null)
+            {
+                bestPath.Add(bestChild);
+                bestChild = bestChild.Children.OrderByDescending(c => c.TotalReward / c.Visits).FirstOrDefault();
+            }
+
+            return bestPath;
+        }
+
+        public MCTSNode TreePolicy(MCTSNode node, Point opponentPosition)
+        {
+            while (!IsTerminal(node, opponentPosition))
+            {
+                if (!IsFullyExpanded(node))
+                {
+                    return Expand(node);
+                }
+                else
+                {
+                    node = BestChild(node);
+                }
+            }
+            return node;
+        }
+
+        public bool IsTerminal(MCTSNode node, Point opponentPosition)
+        {
+            // Define your terminal condition here
+            return WorldMapPerspective.EuclideanDistance(node.State, opponentPosition) >= 8;
+        }
+
+        public bool IsFullyExpanded(MCTSNode node)
+        {
+            return Neighbours(node.State, false).All(neighbour => node.Children.Any(child => child.State.Equals(neighbour)));
+        }
+
+        public MCTSNode Expand(MCTSNode node)
+        {
+            var untriedNeighbours = Neighbours(node.State, false).Where(neighbour => node.Children.All(child => !child.State.Equals(neighbour))).ToList();
+
+            if (untriedNeighbours.Any())
+            {
+                var neighbour = untriedNeighbours.First();  // or randomly select one
+                var child = new MCTSNode
+                {
+                    State = neighbour,
+                    Parent = node
+                };
+                node.Children.Add(child);
+                return child;
+            }
+            return null;  // No more neighbours to expand
+        }
+
+        public double SimulateFrom(Node state, Point opponentPosition)
+        {
+            // Run a quick simulation using your game rules and utility methods
+            double reward = 0;
+            for (int steps = 0; steps < 8; ++steps)  // Simulate 10 steps ahead, for example
+            {
+                var possibleMoves = Neighbours(state, false);
+                if (!possibleMoves.Any())
+                {
+                    break;  // Terminal state reached in simulation
+                }
+
+                // Select a move (either randomly or using some other policy)
+                state = possibleMoves.First();  // This is a random choice; you could make it smarter
+
+                // Update the reward based on the new state
+                reward -= WorldMapPerspective.ManhattanDistance(state, opponentPosition);  // Negative because we want to maximize distance from opponent
+            }
+            return reward;
+        }
+
+        public void Backpropagate(MCTSNode node, double reward)
+        {
+            while (node != null)
+            {
+                node.Visits++;
+                node.TotalReward += reward;
+                node = node.Parent;
+            }
+        }
+
+        public MCTSNode BestChild(MCTSNode node)
+        {
+            // Use UCT formula to select the best child
+            double logParentVisits = Math.Log(node.Visits);
+            return node.Children.OrderByDescending(c => c.TotalReward / c.Visits + Math.Sqrt(2 * logParentVisits / c.Visits)).FirstOrDefault();
         }
     }
     public class NodeComparer : IComparer<Node>
@@ -729,5 +912,14 @@ namespace ReferenceBot.Services
             // Scale and shift the distribution to match the desired mean and standard deviation
             return mean + standardDeviation * randStdNormal;
         }
+    }
+
+    public class MCTSNode
+    {
+        public Node State { get; set; }
+        public MCTSNode Parent { get; set; }
+        public List<MCTSNode> Children { get; set; } = new List<MCTSNode>();
+        public int Visits { get; set; }
+        public double TotalReward { get; set; }
     }
 }
