@@ -6,7 +6,6 @@ using ReferenceBot.Services;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Diagnostics;
 using System.Globalization;
 using Domain.Enums;
 using System.Collections.Generic;
@@ -21,7 +20,6 @@ namespace ReferenceBot
 
         private static IConfigurationRoot Configuration;
 
-        private static bool gui = true;
         private static Dictionary<int, (Point Position, string MovementState, InputCommand CommandSent, Point DeltaToPosition, int Level)> GameStateDict = new();
         private static void Main(string[] args)
         {
@@ -92,34 +90,23 @@ namespace ReferenceBot
                 "ReceiveBotState",
                 (botState) =>
                 {
-                    string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
-                    Stopwatch sw = Stopwatch.StartNew();
+                    var timestamp = DateTime.Now;
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, InputCommand.None, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
                     PositionHistory.AddPosition(botState.CurrentPosition);
                     BotCommand command;
                     command = pathTraversalService.NextCommand(botState, GameStateDict);
                     if (WorldMapPerspective.OpponentsInCloseRange) command = adversarialDecisionService.NextCommand(command, botState, GameStateDict);
                     connection.InvokeAsync("SendPlayerCommand", command);
+                    var timestamp2 = DateTime.Now;
+                    
                     CommandHistory.AddCommand(command.Action);
-                    sw.Stop();
-
                     WorldMapPerspective.UpdateState(botState);
-                    Console.WriteLine($"Received at {timestamp}");
+                    Console.WriteLine($"Received at {timestamp.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture)}");
                     Console.WriteLine($"{botNickname} -> X: {botState.X}, Y: {botState.Y}, Level {botState.CurrentLevel}, Tick {botState.GameTick}, Col: {botState.Collected}");
-
-                    var ticks = sw.ElapsedTicks;
-                    timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fffffff", CultureInfo.InvariantCulture);
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"Evaluating command took {(double)ticks / TimeSpan.TicksPerMillisecond}ms");
+                    Console.WriteLine($"Sent {command.Action} after {timestamp2.Subtract(timestamp).Ticks / 10000d:F4} ms");
                     Console.ResetColor();
-                    Console.WriteLine($"Sent {command.Action} at {timestamp}");
                     GameStateDict[botState.GameTick] = (botState.CurrentPosition, botState.CurrentState, command.Action, !GameStateDict.ContainsKey(botState.GameTick - 1) || GameStateDict[botState.GameTick - 1].Level != botState.CurrentLevel ? new Point(0, 0) : new Point(botState.X - GameStateDict[botState.GameTick - 1].Position.X, botState.Y - GameStateDict[botState.GameTick - 1].Position.Y), botState.CurrentLevel);
-                    if (botState.GameTick > 2 && GameStateDict[botState.GameTick].Position.Equals(GameStateDict[botState.GameTick - 1].Position))
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"************** No mvt at tick {botState.GameTick} **************");
-                        Console.ResetColor();
-                    }
                 }
             );
 
